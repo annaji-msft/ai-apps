@@ -1,1 +1,5 @@
 release/
+
+# Local virtualenv used when running samples
+.venv/
+

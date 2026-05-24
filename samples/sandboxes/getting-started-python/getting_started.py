@@ -111,7 +111,7 @@ def main() -> None:
     sandbox = None
     try:
         sandbox = client.begin_create_sandbox(disk="ubuntu").result()
-        print(f"    sandbox: {sandbox.id}")
+        print(f"    sandbox: {sandbox.sandbox_id}")
 
         print("==> Running command in sandbox...")
         result = sandbox.exec("echo hello world && uname -a")
@@ -123,7 +123,7 @@ def main() -> None:
             sys.exit(f"command exited with code {result.exit_code}")
     finally:
         if sandbox is not None:
-            print(f"==> Deleting sandbox {sandbox.id}...")
+            print(f"==> Deleting sandbox {sandbox.sandbox_id}...")
             sandbox.delete()
         client.close()
         mgmt.close()

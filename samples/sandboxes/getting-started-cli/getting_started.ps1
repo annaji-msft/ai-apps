@@ -60,8 +60,13 @@ aca doctor
 
 # 6. Create a sandbox and run a command
 Write-Host '==> Creating sandbox...'
-$SandboxId = (aca sandbox create --disk ubuntu -o tsv --query id).Trim()
-Write-Host "    sandbox: $SandboxId"
+$createOutput = aca sandbox create --disk ubuntu | Out-String
+Write-Host $createOutput.TrimEnd()
+$match = [regex]::Match($createOutput, '(?m)^Created sandbox:\s*(\S+)')
+if (-not $match.Success) {
+    throw 'Could not parse sandbox id from create output'
+}
+$SandboxId = $match.Groups[1].Value
 
 try {
     Write-Host '==> Running command in sandbox...'

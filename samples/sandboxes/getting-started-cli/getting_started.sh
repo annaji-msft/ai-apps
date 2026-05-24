@@ -57,8 +57,13 @@ aca doctor
 
 # 6. Create a sandbox and run a command
 echo "==> Creating sandbox..."
-SANDBOX_ID="$(aca sandbox create --disk ubuntu -o tsv --query id)"
-echo "    sandbox: ${SANDBOX_ID}"
+CREATE_OUTPUT="$(aca sandbox create --disk ubuntu)"
+echo "${CREATE_OUTPUT}"
+SANDBOX_ID="$(echo "${CREATE_OUTPUT}" | sed -n 's/^Created sandbox: //p' | tail -n1)"
+if [[ -z "${SANDBOX_ID}" ]]; then
+    echo "error: could not parse sandbox id from create output" >&2
+    exit 1
+fi
 
 cleanup() {
     echo "==> Deleting sandbox ${SANDBOX_ID}..."
