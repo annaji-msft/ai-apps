@@ -1,57 +1,28 @@
-# ACA CLI
+# ACA Sandboxes — Samples
 
-Command-line interface for Azure Container Apps.
+Runnable samples for **Azure Container Apps sandboxes**, demonstrating both the
+[`aca` CLI](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md)
+and the [Python SDK](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md).
 
-## Prerequisites
+> Installation, authentication, and one-time setup (resource group, sandbox
+> group, role assignment) live in the upstream READMEs linked below. Start
+> there, then come back here to run the samples.
 
-- **Azure CLI** (`az`) must be installed — [Install Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-- Run `az login` at least once before using `aca`. The CLI uses Azure CLI authentication.
+## Upstream docs
 
-## Installation
+| Surface | README | What you'll find |
+|---------|--------|------------------|
+| ACA CLI (Early Access) | [aca-cli/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md) | Install scripts (Linux/macOS/Windows), `aca` command reference, sandbox group setup, role assignment. |
+| Python SDK (Early Access) | [python-sdk/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md) | `pip install` instructions, `DefaultAzureCredential` auth, full API reference, async support. |
 
-### Linux / macOS
+## Samples in this folder
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/annaji-msft/aca/main/install.sh | sh
-```
+See [`samples/`](samples) for runnable examples.
 
-To install a specific version:
+| Sample | Description |
+|--------|-------------|
+| [`samples/sandboxes/hello-world-python`](samples/sandboxes/hello-world-python) | Minimal Python SDK sample — create a sandbox, run a command, delete it. |
+| [`samples/sandboxes/hello-world-cli`](samples/sandboxes/hello-world-cli) | Minimal `aca` CLI sample (Bash + PowerShell) — create a sandbox, run a command, delete it. |
 
-```sh
-ACA_VERSION=v0.1.0-preview curl -fsSL https://raw.githubusercontent.com/annaji-msft/aca/main/install.sh | sh
-```
-
-### Windows (PowerShell)
-
-```powershell
-irm https://raw.githubusercontent.com/annaji-msft/aca/main/install.ps1 | iex
-```
-
-To install a specific version:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/annaji-msft/aca/main/install.ps1))) -Version v0.1.0-preview
-```
-
-## Uninstall
-
-### Linux / macOS
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/annaji-msft/aca/main/install.sh | sh -s -- --uninstall
-```
-
-### Windows (PowerShell)
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/annaji-msft/aca/main/install.ps1))) -Uninstall
-```
-
-## Supported Platforms
-
-| Platform | Architecture |
-|----------|-------------|
-| Linux    | x64, ARM64  |
-| macOS    | ARM64       |
-| Windows  | x64         |
-
+More samples (snapshots, ports, egress policies, sandbox inception, cross-group
+orchestration, async/parallel) will be added under `samples/sandboxes/`.
