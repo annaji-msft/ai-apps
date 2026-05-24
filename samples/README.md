@@ -17,8 +17,8 @@ first — every sample in this folder assumes that setup is already done.
 
 | Sample | Description |
 |--------|-------------|
-| [`sandboxes/hello-world-python`](sandboxes/hello-world-python) | Minimal Python SDK sample — create a sandbox, run a command, delete it. |
-| [`sandboxes/hello-world-cli`](sandboxes/hello-world-cli) | Minimal `aca` CLI sample (Bash + PowerShell) — create a sandbox, run a command, delete it. |
+| [`sandboxes/getting-started-python`](sandboxes/getting-started-python) | End-to-end Python SDK sample — login, resource group, sandbox group, role assignment, create sandbox, exec command, cleanup. |
+| [`sandboxes/getting-started-cli`](sandboxes/getting-started-cli) | End-to-end `aca` CLI sample (Bash + PowerShell) — login, resource group, sandbox group, role assignment, create sandbox, exec command, cleanup. |
 
 More samples (snapshots, ports, egress policies, sandbox inception, cross-group
 orchestration, async/parallel) will be added here.
