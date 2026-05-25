@@ -56,6 +56,7 @@ documentation and how to override defaults.
 
 | # | Guide | What it shows | Status |
 |---|---|---|---|
+| 00 | [sandbox-groups](guides/00-sandbox-groups) | Create group, assign role, run sandbox, delete group | ✅ ready |
 | 01 | [sandboxes](guides/01-sandboxes) | Create sandbox, exec command, delete | ✅ ready |
 | 02 | [files](guides/02-files) | write / read / stat / list / mkdir / delete | ✅ ready |
 | 03 | [ports](guides/03-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |

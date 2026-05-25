@@ -16,6 +16,8 @@ that uses these samples.
 
 ## Sandboxes — guides (one capability per script)
 
+- [00-sandbox-groups](sandboxes/guides/00-sandbox-groups/README.md):
+  Create a sandbox group (ARM), assign the data-owner role, run a sandbox, delete the group. Python + CLI.
 - [01-sandboxes](sandboxes/guides/01-sandboxes/README.md):
   Create a sandbox, run a shell command, delete the sandbox. Python + CLI.
 - [02-files](sandboxes/guides/02-files/README.md):
