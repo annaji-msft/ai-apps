@@ -3,3 +3,10 @@ release/
 # Local virtualenv used when running samples
 .venv/
 
+# Python build artifacts
+__pycache__/
+*.pyc
+
+# Sample configuration written by setup scripts (machine-local)
+samples/.env
+
