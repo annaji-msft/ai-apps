@@ -40,9 +40,7 @@ and how to override defaults.
 | 12 | async | `aio` SDK + `asyncio.gather` basics | Phase 3 |
 | 13 | managed-identity | SystemAssigned / UserAssigned identity on group | Phase 3 |
 
-### Scenarios — composed use cases (with production tips)
-
-| Scenario | Composes | Status |
+### Scenarios — composed use cases (with production tips)| Scenario | Composes | Status |
 |---|---|---|
 | [web-app-deployment](scenarios/web-app-deployment) | files + ports + exec | ✅ ready |
 | agent-swarm | 2 groups + MI + SDK-in-sandbox inception | Phase 2 |
@@ -51,11 +49,11 @@ and how to override defaults.
 | checkpoint-rollback | snapshot before risky op → restore on failure | Phase 3 |
 | golden-image-workflow | custom disk → boot → configure → commit → reuse | Phase 3 |
 | ai-coding-agent | secrets + egress + custom disk + commit | Phase 3 |
-
-### Agents — drop-in coding-agent integrations
-
-Coming in Phase 3. Run popular coding agents (Claude Code, OpenAI Codex,
-GitHub Copilot CLI, LangChain, AutoGen) inside an ACA sandbox.
+| claude-code-in-sandbox | run Claude Code CLI per task in fresh sandbox | Phase 3 |
+| codex-in-sandbox | run OpenAI Codex CLI per task in fresh sandbox | Phase 3 |
+| copilot-cli-in-sandbox | run GitHub Copilot CLI per task in fresh sandbox | Phase 3 |
+| langchain-tool-runtime | sandbox as a LangChain `BashTool` backend | Phase 3 |
+| autogen-code-executor | sandbox as an AutoGen `CodeExecutor` | Phase 3 |
 
 ## Reference
 

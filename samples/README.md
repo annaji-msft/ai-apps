@@ -12,7 +12,6 @@ samples/
     setup/             setup/        setup/              setup/            (composes other pillars)
     guides/            guides/       guides/             guides/
     scenarios/         scenarios/    scenarios/          scenarios/
-    agents/                                                                scenarios/
 ```
 
 - **`setup/`** — one Python script per pillar. Run it once. Provisions the
@@ -22,10 +21,9 @@ samples/
   Numbered for reading order.
 - **`scenarios/*`** — composed end-to-end use cases. Each scenario has a
   narrative README, working code in Python and CLI variants, and a
-  "Production tips" section.
-- **`agents/*`** — drop-in integrations showing how to run popular coding
-  agents (Claude Code, OpenAI Codex, GitHub Copilot CLI, LangChain, AutoGen)
-  inside the pillar's runtime.
+  "Production tips" section. Integrations with third-party agents (Claude
+  Code, OpenAI Codex, GitHub Copilot CLI, LangChain, AutoGen, etc.) live
+  here too — they're just scenarios that happen to wrap an external agent.
 
 ## Quickstart
 

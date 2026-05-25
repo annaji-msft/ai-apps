@@ -4,7 +4,7 @@
 
 Long-running container apps and one-shot container apps jobs. Will follow
 the same shape as [`sandboxes/`](../sandboxes/README.md): `setup/`,
-`guides/NN-*`, `scenarios/*`, and (where applicable) `agents/`.
+`guides/NN-*`, and `scenarios/*`.
 
 Planned guides: getting-started, revisions, scaling, jobs, secrets-and-config,
 dapr, managed-identity, vnet-integration.
