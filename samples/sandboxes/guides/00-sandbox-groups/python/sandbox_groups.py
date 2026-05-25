@@ -113,6 +113,19 @@ def main() -> None:
         mgmt.create_group(group_name, location=region)
         group_created = True
 
+        # ----- 1a. List groups in this resource group -----
+        print(f"==> Listing sandbox groups in '{resource_group}':")
+        for g in mgmt.list_groups():
+            marker = " <-- just created" if g.name == group_name else ""
+            print(f"    - {g.name} ({g.location}){marker}")
+
+        # ----- 1b. Get full details for our new group -----
+        print(f"==> Getting details for '{group_name}':")
+        detail = mgmt.get_group(group_name)
+        print(f"    location:   {detail.location}")
+        print(f"    state:      {detail.properties.get('provisioningState', '?')}")
+        print(f"    endpoint:   {detail.properties.get('managementEndpoint', '?')}")
+
         # ----- 2. Assign the data-owner role at GROUP scope -----
         principal_id, principal_type = _principal()
         print(f"==> Assigning '{ROLE_NAME}'")

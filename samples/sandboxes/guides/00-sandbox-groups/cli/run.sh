@@ -66,6 +66,14 @@ echo "==> Creating sandbox group '$GROUP_NAME' in $REGION..."
 aca sandboxgroup create --name "$GROUP_NAME" --location "$REGION"
 GROUP_CREATED=1
 
+# ----- 1a. List groups in this resource group -----
+echo "==> Listing sandbox groups in '$ACA_RESOURCE_GROUP':"
+aca sandboxgroup list
+
+# ----- 1b. Get full details for our new group -----
+echo "==> Getting details for '$GROUP_NAME':"
+aca sandboxgroup get --name "$GROUP_NAME"
+
 # ----- 2. Assign the data-owner role at GROUP scope -----
 PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
 if [[ -z "$PRINCIPAL_ID" ]]; then

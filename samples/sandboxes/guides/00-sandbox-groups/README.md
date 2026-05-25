@@ -3,10 +3,12 @@
 Walk through the full provisioning lifecycle of a sandbox group:
 
 1. **Create the group** - ARM control plane.
-2. **Assign the role** - `Container Apps SandboxGroup Data Owner` to
+2. **List + get** the group - the standard `create / list / get` triad
+   you'll see at the top of every guide in this catalog.
+3. **Assign the role** - `Container Apps SandboxGroup Data Owner` to
    the current principal at the group scope.
-3. **Use the data plane** - create a sandbox, exec, delete.
-4. **Tear it down** - delete the group.
+4. **Use the data plane** - create a sandbox, exec, delete.
+5. **Tear it down** - delete the group.
 
 This is the same flow `samples/sandboxes/setup/python/setup.py` (and its
 CLI counterpart) runs once for the shared group. Working through it
