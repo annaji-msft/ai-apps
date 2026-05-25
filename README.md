@@ -4,31 +4,41 @@ Runnable samples and reference scenarios for building **AI-native applications
 on Azure Container Apps** — sandboxes, container apps, service connectors,
 event triggers, and the cross-product workloads that compose them.
 
+## Prerequisites
+
+| | Required for | Install / docs |
+|---|---|---|
+| **Azure subscription** with permission to create resource groups and assign roles | everything | — |
+| **Azure CLI** (`az`) + `az login` | everything | <https://learn.microsoft.com/cli/azure/install-azure-cli> |
+| **Python 3.10+** + `pip` | Python guides + `setup/python/setup.py` | <https://www.python.org/downloads/> |
+| **Bash** + **`curl`** | CLI guides + `setup/cli/setup.sh` | built-in on Linux/macOS; on Windows use Git Bash, WSL, or MSYS2 |
+| **`aca` CLI** | CLI guides | installed automatically by `setup/cli/setup.sh` ([docs](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md)) |
+
+You only need **one** of Python or Bash — pick the flow that matches the
+guides you'll run.
+
 ## Quickstart
 
 ```bash
-# 1. Install prerequisites
-#    - Python 3.10+
-#    - Azure CLI: https://learn.microsoft.com/cli/azure/install-azure-cli
-
-# 2. Authenticate
+# 1. Authenticate
 az login
 
-# 3. Clone
+# 2. Clone
 git clone https://github.com/annaji-msft/aca && cd aca/samples
 
-# 4. Provision the pillar you want to try (one-time per pillar)
-cd sandboxes/setup && pip install -r requirements.txt && python setup.py
+# 3. Provision the pillar you want to try (one-time per pillar)
+cd sandboxes/setup/python && pip install -r requirements.txt && python setup.py
+#  OR:  cd sandboxes/setup/cli && ./setup.sh
 
-# 5. Run any sample — cd anywhere, the script just works
-cd ../guides/01-sandboxes/python
+# 4. Run any sample — cd anywhere, the script just works
+cd ../../guides/01-sandboxes/python
 pip install -r requirements.txt
 python sandboxes.py
 ```
 
 Every sample is self-contained: `cd` into its folder, install its
 `requirements.txt`, and run. Configuration is auto-discovered from the
-`.env` file written by `setup.py`.
+`.env` file written by setup.
 
 ## Pillars
 

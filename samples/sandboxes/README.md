@@ -2,6 +2,24 @@
 
 Isolated, on-demand VMs for AI agents and code execution.
 
+## Prerequisites
+
+Make sure you have all of the following before running any lab:
+
+| | Required for | Install / docs |
+|---|---|---|
+| **Azure subscription** | everything | one with permission to create resource groups and assign roles |
+| **Azure CLI** (`az`) | everything — used to authenticate | <https://learn.microsoft.com/cli/azure/install-azure-cli> |
+| **`az login` completed** | everything | run `az login` once after installing the CLI |
+| **Python 3.10+** + `pip` | Python guides + `setup/python/setup.py` | <https://www.python.org/downloads/> |
+| **Bash** | CLI guides + `setup/cli/setup.sh` | built-in on Linux/macOS; on Windows use Git Bash, WSL, or MSYS2 |
+| **`aca` CLI** | CLI guides | installed automatically by `setup/cli/setup.sh`, or follow <https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md> |
+| **`curl`** | the install script that pulls down `aca` | usually already present; on Windows it ships with Git for Windows / WSL |
+
+You only need **one** of Python or Bash — pick the flow that matches the
+guides you'll run. Both flows produce the same `samples/.env`, so you
+can mix freely later.
+
 ## Quickstart
 
 One-time baseline (resource group + sandbox group + RBAC). Pick the
