@@ -10,7 +10,7 @@ done
 if [[ -f "$dir/.env" ]]; then
     set -a; . "$dir/.env"; set +a
 else
-    echo "error: could not find samples/.env - run setup/setup.py first?" >&2
+    echo "error: could not find samples/.env - run setup/cli/setup.sh first?" >&2
     exit 1
 fi
 

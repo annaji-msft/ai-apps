@@ -1,48 +1,55 @@
 # Sandboxes pillar - setup
 
-Provisions the baseline infrastructure every sample in `samples/sandboxes`
-needs:
+The sandboxes pillar samples need a small one-time Azure baseline:
 
-1. A **resource group** to hold everything
-2. A **sandbox group** (the data-plane endpoint for creating sandboxes)
-3. The **Container Apps SandboxGroup Data Owner** role assigned to your
-   current principal at the resource-group scope, so every sandbox group
-   you create under it inherits the permission
+1. A resource group
+2. A sandbox group inside it
+3. The `Container Apps SandboxGroup Data Owner` role on the current
+   principal at the resource-group scope
+4. A `samples/.env` file that all guides (Python and CLI) read
 
-Run once. Re-running is safe (everything is idempotent).
+Pick the flow that matches the surface you want to use:
 
-## Prerequisites
+| Flow | Folder | When to use |
+|------|--------|-------------|
+| **Python SDK** | [`python/`](./python/) | You'll mostly run the Python guides. Needs Python 3.10+ + pip. |
+| **`aca` CLI**  | [`cli/`](./cli/)       | You'll mostly run the CLI guides. **No Python required** - bash on Linux/macOS, PowerShell on Windows. |
 
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-  installed and `az login` completed
-- Python 3.10+
-- A subscription where you can create resource groups and assign roles
+Both flows write the same six keys to `samples/.env`
+(`AZURE_SUBSCRIPTION_ID`, `ACA_SUBSCRIPTION`, `ACA_RESOURCE_GROUP`,
+`ACA_SANDBOX_GROUP`, `ACA_SANDBOXGROUP_REGION`, `ACA_REGION`), so you
+can run either one, both, or switch between them without losing state.
 
-## Run
+## Quickstart - Python
 
 ```bash
+cd python
 pip install -r requirements.txt
 python setup.py
 ```
 
-Defaults (override with environment variables):
+## Quickstart - CLI (bash)
 
-| Variable | Default |
-|---|---|
-| `AZURE_SUBSCRIPTION_ID` | auto-detected from `az account show` |
-| `ACA_RESOURCE_GROUP` | `ai-apps-samples-rg` |
-| `ACA_SANDBOX_GROUP` | `ai-apps-samples-group` |
-| `ACA_SANDBOXGROUP_REGION` | `westus2` |
+```bash
+cd cli
+./setup.sh
+```
 
-The script writes the resulting values to `samples/.env`. Every other
-sample in this pillar reads from that file automatically - you do not
-need to export any environment variables to run them.
+## Quickstart - CLI (PowerShell)
+
+```powershell
+cd cli
+.\setup.ps1
+```
 
 ## Teardown
 
+Use whichever folder you set up from:
+
 ```bash
-python teardown.py            # asks for confirmation
-python teardown.py --yes      # no prompt
+python python/teardown.py            # or: python/teardown.py --yes
+./cli/teardown.sh                    # or: ./cli/teardown.sh --yes
+.\cli\teardown.ps1                   # or: .\cli\teardown.ps1 --yes
 ```
 
-Deletes the sandbox group and the resource group (everything in it).
+All three delete the sandbox group and the resource group.

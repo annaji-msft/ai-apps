@@ -10,7 +10,7 @@ while ($dir -and -not (Test-Path (Join-Path $dir '.env'))) {
 }
 $envFile = Join-Path $dir '.env'
 if (-not (Test-Path $envFile)) {
-    Write-Error "Could not find samples/.env - run setup/setup.py first?"
+    Write-Error "Could not find samples/.env - run setup/cli/setup.ps1 first?"
     exit 1
 }
 Get-Content $envFile | ForEach-Object {

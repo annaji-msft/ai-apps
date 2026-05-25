@@ -1,6 +1,6 @@
 """Snapshots - capture sandbox state and restore it into a new sandbox.
 
-Reads configuration from samples/.env (written by samples/sandboxes/setup/setup.py).
+Reads configuration from samples/.env (written by samples/sandboxes/setup/python/setup.py).
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from azure.containerapps.sandbox import (
 
 
 def _load_env() -> None:
+    """Load samples/.env; exit with a friendly error if it isn't there yet."""
+    import sys
     for parent in Path(__file__).resolve().parents:
         env = parent / ".env"
         if env.is_file():
@@ -24,7 +26,12 @@ def _load_env() -> None:
                 if line and not line.startswith("#") and "=" in line:
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k.strip(), v.strip())
-            return
+            break
+    if not os.environ.get("ACA_SANDBOXGROUP_REGION"):
+        sys.exit(
+            "error: samples/.env is missing required keys. Run:\n"
+            "       python samples/sandboxes/setup/python/setup.py"
+        )
 
 
 def main() -> None:

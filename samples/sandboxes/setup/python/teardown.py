@@ -1,11 +1,10 @@
 """Tear down the baseline infrastructure for the sandboxes pillar.
 
-Deletes the sandbox group, then the resource group. Run this when you're
-finished with the samples.
+Deletes the sandbox group, then the resource group. Run this when
+you're finished with the samples.
 
   python teardown.py
-
-By default this asks for confirmation. Pass --yes to skip.
+  python teardown.py --yes      # skip confirmation
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.resource import ResourceManagementClient
 from azure.containerapps.sandbox import SandboxGroupManagementClient
 
-SAMPLES_DIR = Path(__file__).resolve().parents[2]
+SAMPLES_DIR = Path(__file__).resolve().parents[3]  # samples/
 ENV_FILE = SAMPLES_DIR / ".env"
 
 

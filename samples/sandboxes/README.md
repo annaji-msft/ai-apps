@@ -4,21 +4,32 @@ Isolated, on-demand VMs for AI agents and code execution.
 
 ## Quickstart
 
+One-time baseline (resource group + sandbox group + RBAC). Pick the
+flow that matches what you'll use the most — both write the same
+`samples/.env` so you can switch freely later.
+
 ```bash
-# 1. One-time baseline (resource group + sandbox group + RBAC)
-cd setup
+# Python SDK flow (needs Python 3.10+)
+cd setup/python
 pip install -r requirements.txt
 python setup.py
-cd ..
 
-# 2. Run a sample — cd into any folder under guides/ or scenarios/
+# OR: aca CLI flow (no Python required)
+cd setup/cli
+./setup.sh        # Linux / macOS
+.\setup.ps1       # Windows / pwsh
+```
+
+Then run a sample — cd into any folder under `guides/` or `scenarios/`:
+
+```bash
 cd guides/01-getting-started/python
 pip install -r requirements.txt
 python getting_started.py
 ```
 
-See [`setup/README.md`](setup/README.md) for what `setup.py` provisions
-and how to override defaults.
+See [`setup/README.md`](setup/README.md) for the full setup
+documentation and how to override defaults.
 
 ## Catalog
 

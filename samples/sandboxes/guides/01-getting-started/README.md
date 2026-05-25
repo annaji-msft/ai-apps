@@ -8,8 +8,10 @@ Choose your style:
 - [`python/`](python/) - Python SDK
 - [`cli/`](cli/) - `aca` CLI (bash + PowerShell)
 
-Both variants read configuration from `samples/.env`, which is created by
-[`../../setup/setup.py`](../../setup/). Run that once before any guide.
+Both variants read configuration from `samples/.env`, which is created
+by running [`../../setup/python/setup.py`](../../setup/python/) **or**
+[`../../setup/cli/setup.sh`](../../setup/cli/) /
+[`setup.ps1`](../../setup/cli/) — pick one. Run it once before any guide.
 
 ## What you'll see
 

@@ -1,7 +1,7 @@
 # 01 - Getting started (CLI)
 
 ```bash
-# One-time, from samples/sandboxes/setup/:  python setup.py
+# One-time, from samples/sandboxes/setup/cli/:  ./setup.sh   (or .\setup.ps1)
 ./run.sh              # bash / zsh
 ./run.ps1             # PowerShell
 ```

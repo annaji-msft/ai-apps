@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Getting started - create a sandbox, run a command, delete it (aca CLI).
 #
-# Reads samples/.env (written by samples/sandboxes/setup/setup.py) for
+# Reads samples/.env (written by samples/sandboxes/setup/cli/setup.sh) for
 # ACA_SUBSCRIPTION, ACA_RESOURCE_GROUP, ACA_SANDBOX_GROUP.
 
 set -euo pipefail
@@ -17,7 +17,7 @@ if [[ -f "$dir/.env" ]]; then
     . "$dir/.env"
     set +a
 else
-    echo "error: could not find samples/.env - run setup/setup.py first?" >&2
+    echo "error: could not find samples/.env - run setup/cli/setup.sh first?" >&2
     exit 1
 fi
 

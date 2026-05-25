@@ -15,16 +15,25 @@ Codex, Cursor, etc.) generating code that targets this repo's pillars.
 
 ## Setup pattern
 
-Every pillar has its own `setup/` script. It is idempotent — re-running
-it is safe.
+Every pillar has a `setup/` folder split by surface — `python/` (Python
+SDK provisioning, needs Python) and `cli/` (`az` + `aca` CLI
+provisioning, no Python). Both write the same `samples/.env`, so the
+user can pick whichever matches the language they'll use most. Both are
+idempotent — re-running is safe.
 
 ```bash
-cd samples/<pillar>/setup
+# Python flow
+cd samples/<pillar>/setup/python
 pip install -r requirements.txt
 python setup.py
+
+# CLI flow (no Python)
+cd samples/<pillar>/setup/cli
+./setup.sh            # Linux / macOS
+.\setup.ps1           # Windows / pwsh
 ```
 
-`setup.py` writes `samples/.env`. All per-sample scripts walk up parent
+Both flows write `samples/.env`. All per-sample scripts walk up parent
 directories to find that `.env` automatically — never ask the user to set
 environment variables manually.
 

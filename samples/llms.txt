@@ -11,7 +11,8 @@ that uses these samples.
 ## Setup (run once per pillar)
 
 - [Sandboxes setup](sandboxes/setup/README.md): Provisions resource group +
-  sandbox group + RBAC. Run with `python setup.py`. Writes `samples/.env`.
+  sandbox group + RBAC. Run `setup/python/setup.py` (Python SDK flow) **or**
+  `setup/cli/setup.sh` / `setup.ps1` (CLI flow, no Python). Writes `samples/.env`.
 
 ## Sandboxes — guides (one capability per script)
 

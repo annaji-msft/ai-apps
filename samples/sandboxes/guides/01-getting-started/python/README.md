@@ -1,7 +1,7 @@
 # 01 - Getting started (Python)
 
 ```bash
-# One-time, from samples/sandboxes/setup/:  python setup.py
+# One-time, from samples/sandboxes/setup/python/:  python setup.py
 pip install -r requirements.txt
 python getting_started.py
 ```

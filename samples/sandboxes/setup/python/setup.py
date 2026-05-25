@@ -1,4 +1,4 @@
-"""Provision the baseline infrastructure for the sandboxes pillar.
+"""Provision the baseline infrastructure for the sandboxes pillar (Python flow).
 
 Creates (all idempotent):
 
@@ -8,17 +8,18 @@ Creates (all idempotent):
                               (Container Apps SandboxGroup Data Owner,
                                assigned to current principal at RG scope)
 
-Then writes ``samples/.env`` with the resulting configuration so every
-sample in the pillar can read it without manual environment setup.
+Writes ``samples/.env`` so every guide can find the configuration.
+
+This script does NOT install or configure the ``aca`` CLI — for that,
+use ``../cli/setup.sh`` (Linux/macOS) or ``..\\cli\\setup.ps1`` (Windows).
+The two flows share state via ``samples/.env``; run one or both in any order.
 
 Prerequisites:
   * Azure CLI installed and `az login` completed (or any other
     DefaultAzureCredential source)
   * Python 3.10+
-  * Permission to create resource groups and assign roles in the target
-    subscription
 
-Override defaults with environment variables (see ``samples/.env.example``):
+Override defaults with environment variables:
 
   AZURE_SUBSCRIPTION_ID       (auto-detected from `az account show` if unset)
   ACA_RESOURCE_GROUP          default: ai-apps-samples-rg
@@ -33,6 +34,7 @@ Run:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -53,7 +55,7 @@ DEFAULTS = {
     "ACA_SANDBOX_GROUP": "ai-apps-samples-group",
     "ACA_SANDBOXGROUP_REGION": "westus2",
 }
-SAMPLES_DIR = Path(__file__).resolve().parents[2]  # samples/
+SAMPLES_DIR = Path(__file__).resolve().parents[3]  # samples/
 ENV_FILE = SAMPLES_DIR / ".env"
 
 
@@ -81,8 +83,6 @@ def _detect_principal() -> tuple[str, str]:
     Uses the JWT ``oid`` claim from the management token (works for both
     users and service principals; no Graph permission required).
     """
-    import base64
-
     token = DefaultAzureCredential().get_token(
         "https://management.azure.com/.default"
     )
@@ -132,7 +132,7 @@ def _ensure_role_assignment(
 
 
 def _write_env_file(values: dict[str, str]) -> None:
-    """Merge values into samples/.env, preserving existing keys we don't own."""
+    """Merge values into samples/.env, preserving keys we don't own."""
     existing: dict[str, str] = {}
     if ENV_FILE.exists():
         for line in ENV_FILE.read_text().splitlines():
@@ -141,8 +141,8 @@ def _write_env_file(values: dict[str, str]) -> None:
                 existing[k.strip()] = v.strip()
     existing.update(values)
     lines = [
-        "# Written by samples/sandboxes/setup/setup.py",
-        "# Do not edit by hand - re-run setup.py to update.",
+        "# Written by samples/sandboxes/setup/python/setup.py",
+        "# Re-run python or cli setup to update.",
         "",
     ]
     for key in sorted(existing):
@@ -157,7 +157,7 @@ def main() -> None:
     sandbox_group = os.environ.get("ACA_SANDBOX_GROUP", DEFAULTS["ACA_SANDBOX_GROUP"])
     region = os.environ.get("ACA_SANDBOXGROUP_REGION", DEFAULTS["ACA_SANDBOXGROUP_REGION"])
 
-    print("==> Sandboxes pillar - baseline setup")
+    print("==> Sandboxes pillar - Python SDK setup")
     print(f"    subscription:   {subscription_id}")
     print(f"    resource group: {resource_group}")
     print(f"    sandbox group:  {sandbox_group}")
@@ -165,12 +165,10 @@ def main() -> None:
 
     credential = DefaultAzureCredential()
 
-    # 1. Resource group
     print(f"==> Ensuring resource group '{resource_group}' in {region}...")
     rm = ResourceManagementClient(credential, subscription_id)
     rm.resource_groups.create_or_update(resource_group, {"location": region})
 
-    # 2. Sandbox group
     print(f"==> Ensuring sandbox group '{sandbox_group}'...")
     mgmt = SandboxGroupManagementClient(
         credential,
@@ -185,14 +183,12 @@ def main() -> None:
         else:
             raise
 
-    # 3. RBAC at RG scope (so all groups under it inherit the role).
     print(f"==> Assigning '{ROLE_NAME}'...")
     principal_id, principal_type = _detect_principal()
     auth = AuthorizationManagementClient(credential, subscription_id)
     rg_scope = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
     _ensure_role_assignment(auth, rg_scope, principal_id, principal_type)
 
-    # 4. Write samples/.env so every sample can find this configuration.
     print(f"==> Writing {ENV_FILE.relative_to(SAMPLES_DIR.parent)}...")
     _write_env_file({
         "AZURE_SUBSCRIPTION_ID": subscription_id,
@@ -203,8 +199,6 @@ def main() -> None:
         "ACA_REGION": region,
     })
 
-    # Brief wait so role propagation completes before the first sample runs.
-    # The SDK pipeline retries 401/403, but waiting here is a nicer first-run UX.
     print("==> Waiting briefly for RBAC propagation...")
     time.sleep(10)
 
@@ -215,7 +209,7 @@ def main() -> None:
 
     print("==> Done.")
     print()
-    print("Next:  cd ../guides/01-getting-started/python && python getting_started.py")
+    print("Next:  cd ../../guides/01-getting-started/python && python getting_started.py")
 
 
 if __name__ == "__main__":
