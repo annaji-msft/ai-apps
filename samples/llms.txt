@@ -36,10 +36,9 @@ that uses these samples.
   `labels=` on `begin_create_sandbox` + `list_sandboxes(labels=…)` to query by tenant/role. Python + CLI.
 - [09-lifecycle](sandboxes/guides/09-lifecycle/README.md):
   `stop` / `resume` / `wait_for_running` / `ensure_running` + `AutoSuspendPolicy` + `AutoDeletePolicy`. Python + CLI.
-- [10-custom-disks](sandboxes/guides/10-custom-disks/README.md):
-  `begin_create_disk_image` from a public OCI image, boot a sandbox from it. Python + CLI.
-- [11-commit-to-disk](sandboxes/guides/11-commit-to-disk/README.md):
-  `sandbox.begin_commit(name=…)` freezes a primed sandbox into a reusable disk image. Python + CLI.
+- [10-disks](sandboxes/guides/10-disks/README.md):
+  Build a disk image from a public OCI image **and** commit a running
+  sandbox to a disk image — both flows in one guide. Python + CLI.
 - [12-async](sandboxes/guides/12-async/README.md):
   `azure.containerapps.sandbox.aio` + `asyncio.gather` for concurrent operations. Python only.
 - [13-managed-identity](sandboxes/guides/13-managed-identity/README.md):

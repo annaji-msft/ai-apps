@@ -66,8 +66,7 @@ documentation and how to override defaults.
 | 07 | [volumes](guides/07-volumes) | AzureBlob shared mounts across sandboxes | ✅ ready |
 | 08 | [labels](guides/08-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
 | 09 | [lifecycle](guides/09-lifecycle) | stop / resume + AutoSuspendPolicy + AutoDeletePolicy | ✅ ready |
-| 10 | [custom-disks](guides/10-custom-disks) | `begin_create_disk_image` from public + private images | ✅ ready |
-| 11 | [commit-to-disk](guides/11-commit-to-disk) | `sandbox.commit()` → boot new sandbox from result | ✅ ready |
+| 10 | [disks](guides/10-disks) | Build from container image **and** commit running sandbox to a disk (combined) | ✅ ready |
 | 12 | [async](guides/12-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
 | 13 | [managed-identity](guides/13-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
 | 14 | [interactive-shell](guides/14-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
