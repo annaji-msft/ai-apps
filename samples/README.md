@@ -1,24 +1,56 @@
 # Samples
 
-Runnable samples for Azure Container Apps sandboxes.
+Runnable samples for AI-native applications on Azure Container Apps.
 
-## Before you run a sample
+## How this catalog is organized
 
-Installation, authentication, and one-time setup (resource group, sandbox
-group, role assignment) are documented in the upstream READMEs. Read them
-first — every sample in this folder assumes that setup is already done.
+Five pillars, same shape inside each:
 
-| Surface | README | What you'll find |
-|---------|--------|------------------|
-| ACA CLI (Early Access) | [aca-cli/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md) | Install scripts for Linux/macOS/Windows, `aca` command reference, sandbox group setup, role assignment, `aca doctor`. |
-| Python SDK (Early Access) | [python-sdk/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md) | `pip install` instructions, `DefaultAzureCredential` auth, full API reference, async support. |
+```
+samples/
+  sandboxes/         apps/         connectors/         triggers/         ai-app-workloads/
+    setup/             setup/        setup/              setup/            (composes other pillars)
+    guides/            guides/       guides/             guides/
+    scenarios/         scenarios/    scenarios/          scenarios/
+    agents/                                                                scenarios/
+```
 
-## sandboxes/
+- **`setup/`** — one Python script per pillar. Run it once. Provisions the
+  baseline Azure resources that pillar needs and writes the resulting
+  configuration to `samples/.env`.
+- **`guides/NN-*`** — focused, one-capability-per-script samples (~50 lines).
+  Numbered for reading order.
+- **`scenarios/*`** — composed end-to-end use cases. Each scenario has a
+  narrative README, working code in Python and CLI variants, and a
+  "Production tips" section.
+- **`agents/*`** — drop-in integrations showing how to run popular coding
+  agents (Claude Code, OpenAI Codex, GitHub Copilot CLI, LangChain, AutoGen)
+  inside the pillar's runtime.
 
-| Sample | Description |
-|--------|-------------|
-| [`sandboxes/getting-started-python`](sandboxes/getting-started-python) | End-to-end Python SDK sample — login, resource group, sandbox group, role assignment, create sandbox, exec command, cleanup. |
-| [`sandboxes/getting-started-cli`](sandboxes/getting-started-cli) | End-to-end `aca` CLI sample (Bash + PowerShell) — login, resource group, sandbox group, role assignment, create sandbox, exec command, cleanup. |
+## Quickstart
 
-More samples (snapshots, ports, egress policies, sandbox inception, cross-group
-orchestration, async/parallel) will be added here.
+See the [repo root README](../README.md#quickstart).
+
+## Pillars
+
+| Pillar | Purpose | Status |
+|---|---|---|
+| [`sandboxes/`](sandboxes) | Isolated, on-demand VMs for AI agents and code execution | Setup ready · Guides in progress |
+| [`apps/`](apps) | Long-running container apps and container apps jobs | Coming soon |
+| [`connectors/`](connectors) | Managed service connector bindings | Coming soon |
+| [`triggers/`](triggers) | HTTP / event / scheduled / KEDA triggers | Coming soon |
+| [`ai-app-workloads/`](ai-app-workloads) | Cross-pillar real-world scenarios | Coming soon |
+
+## Conventions
+
+- **Authentication**: every sample uses `DefaultAzureCredential`. Run `az login`
+  once before running any sample.
+- **Configuration**: every sample reads `samples/.env` (created by the
+  appropriate `setup/` script). See [`.env.example`](.env.example) for the
+  full list of variables.
+- **Dependencies**: every sample has its own `requirements.txt` so
+  `pip install -r requirements.txt` from inside the sample folder always
+  works. The root [`requirements.txt`](requirements.txt) holds the shared
+  baseline (ACA SDK + `azure-identity`).
+- **Cleanup**: every sample deletes only what it created. To remove the
+  shared baseline infra, run the pillar's `setup/teardown.py`.

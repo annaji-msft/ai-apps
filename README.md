@@ -1,28 +1,63 @@
-# ACA
+# ai-apps
 
-Runnable samples for **Azure Container Apps sandboxes**, exercising both the
-[`aca` CLI](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md)
-and the [Python SDK](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md).
+Runnable samples and reference scenarios for building **AI-native applications
+on Azure Container Apps** — sandboxes, container apps, service connectors,
+event triggers, and the cross-product workloads that compose them.
 
-> **Installation, authentication, and the full command / API reference live in
-> the upstream repo: [microsoft/azure-container-apps](https://github.com/microsoft/azure-container-apps).**
-> Start there, then come back to run the samples.
+## Quickstart
+
+```bash
+# 1. Install prerequisites
+#    - Python 3.10+
+#    - Azure CLI: https://learn.microsoft.com/cli/azure/install-azure-cli
+
+# 2. Authenticate
+az login
+
+# 3. Clone
+git clone https://github.com/annaji-msft/aca && cd aca/samples
+
+# 4. Provision the pillar you want to try (one-time per pillar)
+cd sandboxes/setup && pip install -r requirements.txt && python setup.py
+
+# 5. Run any sample — cd anywhere, the script just works
+cd ../guides/01-getting-started/python
+pip install -r requirements.txt
+python getting_started.py
+```
+
+Every sample is self-contained: `cd` into its folder, install its
+`requirements.txt`, and run. Configuration is auto-discovered from the
+`.env` file written by `setup.py`.
+
+## Pillars
+
+| Pillar | What it is | Start here |
+|---|---|---|
+| **[Sandboxes](samples/sandboxes)** | Isolated, on-demand VMs for AI agents and code execution | [`samples/sandboxes`](samples/sandboxes) |
+| **[Apps](samples/apps)** | Long-running container apps and one-shot container apps jobs | [`samples/apps`](samples/apps) |
+| **[Connectors](samples/connectors)** | Managed bindings to backing services (Cosmos, Storage, Azure OpenAI, Key Vault) | [`samples/connectors`](samples/connectors) |
+| **[Triggers](samples/triggers)** | HTTP, event, scheduled, and KEDA-driven invocation patterns | [`samples/triggers`](samples/triggers) |
+| **[AI app workloads](samples/ai-app-workloads)** | Real-world scenarios composing two or more pillars | [`samples/ai-app-workloads`](samples/ai-app-workloads) |
+
+Within each pillar:
+
+- **`setup/`** — one Python script that provisions the pillar's baseline infra.
+- **`guides/NN-*`** — one capability per script (~50 lines each).
+- **`scenarios/*`** — composed real use cases with a narrative + production tips.
+- **`agents/*`** (where applicable) — drop-in integrations for popular coding agents.
 
 ## Upstream docs
 
-| Surface | README | What you'll find |
-|---------|--------|------------------|
-| ACA CLI (Early Access) | [docs/early/aca-cli/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md) | Install scripts for Linux/macOS/Windows, full `aca` command reference, sandbox group setup, role assignment, `aca doctor`. |
-| Python SDK (Early Access) | [docs/early/python-sdk/README.md](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md) | `pip install` instructions, `DefaultAzureCredential` auth, full API reference, async support. |
+| Surface | Docs |
+|---|---|
+| Python SDK (Early Access) | [docs/early/python-sdk](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md) |
+| ACA CLI (Early Access) | [docs/early/aca-cli](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md) |
 
-## Samples
+## For coding agents
 
-See [`samples/`](samples) for the runnable examples in this repo.
+If you're a coding agent (GitHub Copilot, Claude Code, Codex, Cursor, etc.)
+generating code that uses this repo:
 
-| Sample | Description |
-|--------|-------------|
-| [`samples/sandboxes/getting-started-cli`](samples/sandboxes/getting-started-cli) | End-to-end `aca` CLI walkthrough (Bash + PowerShell) — login, resource group, sandbox group, role assignment, create sandbox, exec command, cleanup. |
-| [`samples/sandboxes/getting-started-python`](samples/sandboxes/getting-started-python) | Same end-to-end flow using the Python SDK. |
-
-More samples (snapshots, ports, egress policies, sandbox inception, cross-group
-orchestration, async/parallel) will be added under `samples/sandboxes/`.
+- Start with [`samples/AGENTS.md`](samples/AGENTS.md) for idioms and conventions.
+- See [`samples/llms.txt`](samples/llms.txt) for the machine-readable catalog.

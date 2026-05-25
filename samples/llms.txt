@@ -1,0 +1,46 @@
+# ai-apps samples
+
+> Runnable samples and reference scenarios for building AI-native applications
+> on Azure Container Apps. Five pillars: sandboxes, apps, connectors, triggers,
+> and ai-app-workloads (cross-pillar). Every sample is self-contained — `cd`
+> into a folder, install its requirements.txt, run.
+
+See [AGENTS.md](AGENTS.md) for idioms and conventions when generating code
+that uses these samples.
+
+## Setup (run once per pillar)
+
+- [Sandboxes setup](sandboxes/setup/README.md): Provisions resource group +
+  sandbox group + RBAC. Run with `python setup.py`. Writes `samples/.env`.
+
+## Sandboxes — guides (one capability per script)
+
+(Catalog populated as guides ship — see [roadmap](sandboxes/README.md).)
+
+- [01-getting-started](sandboxes/guides/01-getting-started/README.md):
+  Create a sandbox, run a shell command, delete the sandbox.
+
+## Sandboxes — scenarios (composed use cases)
+
+(Catalog populated as scenarios ship.)
+
+## Apps
+
+Coming in Phase 4. See [apps/README.md](apps/README.md).
+
+## Connectors
+
+Coming in Phase 6. See [connectors/README.md](connectors/README.md).
+
+## Triggers
+
+Coming in Phase 7. See [triggers/README.md](triggers/README.md).
+
+## AI app workloads
+
+Coming in Phase 8. See [ai-app-workloads/README.md](ai-app-workloads/README.md).
+
+## Reference
+
+- [Azure Container Apps Python SDK (Early Access)](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md)
+- [ACA CLI (Early Access)](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md)

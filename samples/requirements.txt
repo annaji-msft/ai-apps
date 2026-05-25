@@ -1,0 +1,11 @@
+# Shared baseline dependencies for every Python sample in this repo.
+#
+# Per-sample requirements.txt files reference this file with:
+#   -r ../../../requirements.txt
+# and list ONLY extra dependencies the sample needs (e.g. `requests`,
+# `pandas`, `aiohttp`).
+
+azure-identity>=1.15
+azure-mgmt-resource>=23.0
+azure-mgmt-authorization>=4.0
+https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
