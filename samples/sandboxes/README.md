@@ -30,15 +30,15 @@ and how to override defaults.
 | 02 | [files](guides/02-files) | write / read / stat / list / mkdir / delete | ✅ ready |
 | 03 | [ports](guides/03-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |
 | 04 | [snapshots](guides/04-snapshots) | `create_snapshot`, restore into new sandbox | ✅ ready |
-| 05 | egress | `set_egress_default("Deny")` + host allow rules | Phase 3 |
-| 06 | secrets | upsert / peek / list / delete (group-scoped) | Phase 3 |
-| 07 | volumes | AzureBlob + DataDisk mounts | Phase 3 |
-| 08 | labels | `labels=` on create + `list_sandboxes(labels=…)` | Phase 3 |
-| 09 | lifecycle | stop / resume + AutoSuspendPolicy | Phase 3 |
-| 10 | custom-disks | `create_disk_image` from public + private (ACR) | Phase 3 |
-| 11 | commit-to-disk | `sandbox.commit()` → boot new sandbox from result | Phase 3 |
-| 12 | async | `aio` SDK + `asyncio.gather` basics | Phase 3 |
-| 13 | managed-identity | SystemAssigned / UserAssigned identity on group | Phase 3 |
+| 05 | [egress](guides/05-egress) | `set_egress_default("Deny")` + host allow rules | ✅ ready |
+| 06 | [secrets](guides/06-secrets) | upsert / peek / list / delete (group-scoped) | ✅ ready |
+| 07 | [volumes](guides/07-volumes) | AzureBlob shared mounts across sandboxes | ✅ ready |
+| 08 | [labels](guides/08-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
+| 09 | [lifecycle](guides/09-lifecycle) | stop / resume + AutoSuspendPolicy + AutoDeletePolicy | ✅ ready |
+| 10 | [custom-disks](guides/10-custom-disks) | `begin_create_disk_image` from public + private images | ✅ ready |
+| 11 | [commit-to-disk](guides/11-commit-to-disk) | `sandbox.commit()` → boot new sandbox from result | ✅ ready |
+| 12 | [async](guides/12-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
+| 13 | [managed-identity](guides/13-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
 
 ### Scenarios — composed use cases (with production tips)
 

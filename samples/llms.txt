@@ -23,6 +23,24 @@ that uses these samples.
   `add_port(anonymous=True)`, fetch the public URL, `remove_port`. Python + CLI.
 - [04-snapshots](sandboxes/guides/04-snapshots/README.md):
   `create_snapshot`, boot a new sandbox from the snapshot, verify state preserved. Python + CLI.
+- [05-egress](sandboxes/guides/05-egress/README.md):
+  `set_egress_default("Deny")` + `add_egress_host_rule` to lock down outbound network. Python + CLI.
+- [06-secrets](sandboxes/guides/06-secrets/README.md):
+  Group-scoped secrets — `upsert_secret` / `list_secrets` / `peek_secret` / `delete_secret`. Python + CLI.
+- [07-volumes](sandboxes/guides/07-volumes/README.md):
+  Shared AzureBlob volumes — producer writes, consumer reads, via `add_volume_mount`. Python + CLI.
+- [08-labels](sandboxes/guides/08-labels/README.md):
+  `labels=` on `begin_create_sandbox` + `list_sandboxes(labels=…)` to query by tenant/role. Python + CLI.
+- [09-lifecycle](sandboxes/guides/09-lifecycle/README.md):
+  `stop` / `resume` / `wait_for_running` / `ensure_running` + `AutoSuspendPolicy` + `AutoDeletePolicy`. Python + CLI.
+- [10-custom-disks](sandboxes/guides/10-custom-disks/README.md):
+  `begin_create_disk_image` from a public OCI image, boot a sandbox from it. Python + CLI.
+- [11-commit-to-disk](sandboxes/guides/11-commit-to-disk/README.md):
+  `sandbox.begin_commit(name=…)` freezes a primed sandbox into a reusable disk image. Python + CLI.
+- [12-async](sandboxes/guides/12-async/README.md):
+  `azure.containerapps.sandbox.aio` + `asyncio.gather` for concurrent operations. Python only.
+- [13-managed-identity](sandboxes/guides/13-managed-identity/README.md):
+  SystemAssigned identity on a sandbox group — foundation for agent inception. Python + CLI.
 
 ## Sandboxes — scenarios (composed use cases)
 
