@@ -1,4 +1,4 @@
-# 14 - Interactive shell
+# 13 - Interactive shell
 
 Open a real interactive shell inside a sandbox. Type, get a prompt back,
 run multiple commands, exit cleanly.

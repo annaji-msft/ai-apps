@@ -1,4 +1,4 @@
-# Guide 13 — Managed identity
+# Guide 12 — Managed identity
 
 Sandbox groups can have a System-assigned or User-assigned managed
 identity. The MI's `principalId` can then be granted any Azure RBAC

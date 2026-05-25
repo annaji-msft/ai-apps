@@ -67,9 +67,9 @@ documentation and how to override defaults.
 | 08 | [labels](guides/08-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
 | 09 | [lifecycle](guides/09-lifecycle) | stop / resume + AutoSuspendPolicy + AutoDeletePolicy | ✅ ready |
 | 10 | [disks](guides/10-disks) | Build from container image **and** commit running sandbox to a disk (combined) | ✅ ready |
-| 12 | [async](guides/12-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
-| 13 | [managed-identity](guides/13-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
-| 14 | [interactive-shell](guides/14-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
+| 11 | [async](guides/11-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
+| 12 | [managed-identity](guides/12-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
+| 13 | [interactive-shell](guides/13-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
 
 ### Scenarios — composed use cases (with production tips)
 

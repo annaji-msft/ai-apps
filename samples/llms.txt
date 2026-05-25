@@ -39,11 +39,11 @@ that uses these samples.
 - [10-disks](sandboxes/guides/10-disks/README.md):
   Build a disk image from a public OCI image **and** commit a running
   sandbox to a disk image — both flows in one guide. Python + CLI.
-- [12-async](sandboxes/guides/12-async/README.md):
+- [11-async](sandboxes/guides/11-async/README.md):
   `azure.containerapps.sandbox.aio` + `asyncio.gather` for concurrent operations. Python only.
-- [13-managed-identity](sandboxes/guides/13-managed-identity/README.md):
+- [12-managed-identity](sandboxes/guides/12-managed-identity/README.md):
   SystemAssigned identity on a sandbox group — foundation for agent inception. Python + CLI.
-- [14-interactive-shell](sandboxes/guides/14-interactive-shell/README.md):
+- [13-interactive-shell](sandboxes/guides/13-interactive-shell/README.md):
   `aca sandbox shell` — interactive PTY session into a running sandbox. CLI only.
 
 ## Sandboxes — scenarios (composed use cases)

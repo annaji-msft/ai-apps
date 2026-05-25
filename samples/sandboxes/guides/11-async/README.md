@@ -1,4 +1,4 @@
-# Guide 12 — Async SDK
+# Guide 11 — Async SDK
 
 The async sibling of `azure.containerapps.sandbox` lives at
 `azure.containerapps.sandbox.aio`. Same surface, all coroutines —

@@ -1,4 +1,4 @@
-# 14 - Interactive shell (CLI)
+# 13 - Interactive shell (CLI)
 
 ```bash
 # One-time, from samples/sandboxes/setup/cli/:  ./setup.sh
