@@ -8,7 +8,7 @@ Five pillars, same shape inside each:
 
 ```
 samples/
-  sandboxes/         apps/         connectors/         triggers/         ai-app-workloads/
+  sandboxes/         containerapps/         connectors/         triggers/         ai-apps/
     setup/             setup/        setup/              setup/            (composes other pillars)
     guides/            guides/       guides/             guides/
     scenarios/         scenarios/    scenarios/          scenarios/
@@ -34,10 +34,10 @@ See the [repo root README](../README.md#quickstart).
 | Pillar | Purpose | Status |
 |---|---|---|
 | [`sandboxes/`](sandboxes) | Isolated, on-demand VMs for AI agents and code execution | Setup ready · Guides in progress |
-| [`apps/`](apps) | Long-running container apps and container apps jobs | Coming soon |
+| [`containerapps/`](containerapps) | Long-running container apps and container apps jobs | Coming soon |
 | [`connectors/`](connectors) | Managed service connector bindings | Coming soon |
 | [`triggers/`](triggers) | HTTP / event / scheduled / KEDA triggers | Coming soon |
-| [`ai-app-workloads/`](ai-app-workloads) | Cross-pillar real-world scenarios | Coming soon |
+| [`ai-apps/`](ai-apps) | Cross-pillar real-world scenarios | Coming soon |
 
 ## Conventions
 

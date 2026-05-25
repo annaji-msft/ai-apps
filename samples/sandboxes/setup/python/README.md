@@ -5,8 +5,7 @@ for the sandboxes pillar using the Python management SDK. Writes
 `samples/.env` so every guide can find the configuration.
 
 Does NOT install or configure the `aca` CLI — for that, use
-[`../cli/setup.sh`](../cli/setup.sh) (Linux/macOS) or
-[`..\cli\setup.ps1`](../cli/setup.ps1) (Windows). The two flows share
+[`../cli/setup.sh`](../cli/setup.sh) — runs on Linux, macOS, and Windows (Git Bash / WSL). The two flows share
 state via `samples/.env`; run one or both in any order.
 
 ## Prerequisites

@@ -16,16 +16,17 @@ python setup.py
 
 # OR: aca CLI flow (no Python required)
 cd setup/cli
-./setup.sh        # Linux / macOS
-.\setup.ps1       # Windows / pwsh
+./setup.sh
 ```
+
+> On Windows, run from Git Bash, WSL, MSYS2 — any shell with `bash`.
 
 Then run a sample — cd into any folder under `guides/` or `scenarios/`:
 
 ```bash
-cd guides/01-getting-started/python
+cd guides/01-sandboxes/python
 pip install -r requirements.txt
-python getting_started.py
+python sandboxes.py
 ```
 
 See [`setup/README.md`](setup/README.md) for the full setup
@@ -37,7 +38,7 @@ documentation and how to override defaults.
 
 | # | Guide | What it shows | Status |
 |---|---|---|---|
-| 01 | [getting-started](guides/01-getting-started) | Create sandbox, exec command, delete | ✅ ready |
+| 01 | [sandboxes](guides/01-sandboxes) | Create sandbox, exec command, delete | ✅ ready |
 | 02 | [files](guides/02-files) | write / read / stat / list / mkdir / delete | ✅ ready |
 | 03 | [ports](guides/03-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |
 | 04 | [snapshots](guides/04-snapshots) | `create_snapshot`, restore into new sandbox | ✅ ready |
@@ -50,6 +51,7 @@ documentation and how to override defaults.
 | 11 | [commit-to-disk](guides/11-commit-to-disk) | `sandbox.commit()` → boot new sandbox from result | ✅ ready |
 | 12 | [async](guides/12-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
 | 13 | [managed-identity](guides/13-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
+| 14 | [interactive-shell](guides/14-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
 
 ### Scenarios — composed use cases (with production tips)
 

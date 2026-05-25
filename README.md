@@ -21,9 +21,9 @@ git clone https://github.com/annaji-msft/aca && cd aca/samples
 cd sandboxes/setup && pip install -r requirements.txt && python setup.py
 
 # 5. Run any sample — cd anywhere, the script just works
-cd ../guides/01-getting-started/python
+cd ../guides/01-sandboxes/python
 pip install -r requirements.txt
-python getting_started.py
+python sandboxes.py
 ```
 
 Every sample is self-contained: `cd` into its folder, install its
@@ -35,10 +35,10 @@ Every sample is self-contained: `cd` into its folder, install its
 | Pillar | What it is | Start here |
 |---|---|---|
 | **[Sandboxes](samples/sandboxes)** | Isolated, on-demand VMs for AI agents and code execution | [`samples/sandboxes`](samples/sandboxes) |
-| **[Apps](samples/apps)** | Long-running container apps and one-shot container apps jobs | [`samples/apps`](samples/apps) |
+| **[Container Apps](samples/containerapps)** | Long-running container apps and one-shot container apps jobs | [`samples/containerapps`](samples/containerapps) |
 | **[Connectors](samples/connectors)** | Managed bindings to backing services (Cosmos, Storage, Azure OpenAI, Key Vault) | [`samples/connectors`](samples/connectors) |
 | **[Triggers](samples/triggers)** | HTTP, event, scheduled, and KEDA-driven invocation patterns | [`samples/triggers`](samples/triggers) |
-| **[AI app workloads](samples/ai-app-workloads)** | Real-world scenarios composing two or more pillars | [`samples/ai-app-workloads`](samples/ai-app-workloads) |
+| **[AI app workloads](samples/ai-apps)** | Real-world scenarios composing two or more pillars | [`samples/ai-apps`](samples/ai-apps) |
 
 Within each pillar:
 

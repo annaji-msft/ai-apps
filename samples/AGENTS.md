@@ -7,11 +7,11 @@ Codex, Cursor, etc.) generating code that targets this repo's pillars.
 
 | The user wants to... | Pillar | Example sample to imitate |
 |---|---|---|
-| Run untrusted / agent-generated code in isolation | `sandboxes/` | `sandboxes/guides/01-getting-started` |
-| Deploy a long-running HTTP service | `apps/` | `apps/guides/01-getting-started` (Phase 4) |
-| Connect an app to Cosmos / Storage / Azure OpenAI | `connectors/` | `connectors/guides/01-getting-started` (Phase 6) |
-| Kick off work from an event / HTTP / schedule | `triggers/` | `triggers/guides/01-getting-started` (Phase 7) |
-| Build a real AI app composing two or more of the above | `ai-app-workloads/` | (Phase 8) |
+| Run untrusted / agent-generated code in isolation | `sandboxes/` | `sandboxes/guides/01-sandboxes` |
+| Deploy a long-running HTTP service | `containerapps/` | `containerapps/guides/01-sandboxes` (Phase 4) |
+| Connect an app to Cosmos / Storage / Azure OpenAI | `connectors/` | `connectors/guides/01-sandboxes` (Phase 6) |
+| Kick off work from an event / HTTP / schedule | `triggers/` | `triggers/guides/01-sandboxes` (Phase 7) |
+| Build a real AI app composing two or more of the above | `ai-apps/` | (Phase 8) |
 
 ## Setup pattern
 
@@ -29,8 +29,7 @@ python setup.py
 
 # CLI flow (no Python)
 cd samples/<pillar>/setup/cli
-./setup.sh            # Linux / macOS
-.\setup.ps1           # Windows / pwsh
+./setup.sh            # Linux, macOS, or Windows (Git Bash / WSL / MSYS2)
 ```
 
 Both flows write `samples/.env`. All per-sample scripts walk up parent
@@ -120,10 +119,10 @@ Rules:
    instead.
 6. **Scenarios get a "Production tips" section** in their README.
 
-## CLI sample idioms (bash + powershell)
+## CLI sample idioms (bash)
 
 CLI variants are siblings of `python/` — each scenario / guide that supports
-CLI ships `cli/getting_started.sh` and `cli/getting_started.ps1`. Both:
+CLI ships `cli/run.sh`. Both:
 
 - Use `dirname "$0"` / `$PSScriptRoot` to locate themselves.
 - Walk up to find `samples/.env` and `source` / dot-source it.

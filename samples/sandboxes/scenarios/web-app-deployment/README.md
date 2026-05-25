@@ -6,11 +6,11 @@ public internet.
 Composes three primitives from `guides/`:
 
 - **Files** ([guide 02](../../guides/02-files)) - upload the app source
-- **Exec** ([guide 01](../../guides/01-getting-started)) - start the server
+- **Exec** ([guide 01](../../guides/01-sandboxes)) - start the server
 - **Ports** ([guide 03](../../guides/03-ports)) - publish port 8080
 
 - [`python/`](python/) - Python SDK
-- [`cli/`](cli/) - `aca` CLI (bash + PowerShell)
+- [`cli/`](cli/) - `aca` CLI (bash)
 
 ## What it does
 
@@ -40,4 +40,4 @@ Composes three primitives from `guides/`:
   sandboxes - they wake on the next request.
 - **Don't put long-running production traffic on sandboxes.** They are
   optimized for AI-agent and per-task workloads. For 24/7 services,
-  the `apps/` pillar (Phase 4) is the better fit.
+  the `containerapps/` pillar (Phase 4) is the better fit.

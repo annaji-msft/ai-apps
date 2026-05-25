@@ -1,9 +1,8 @@
-# 01 - Getting started (CLI)
+# 01 - Sandboxes (CLI)
 
 ```bash
-# One-time, from samples/sandboxes/setup/cli/:  ./setup.sh   (or .\setup.ps1)
-./run.sh              # bash / zsh
-./run.ps1             # PowerShell
+# One-time, from samples/sandboxes/setup/cli/:  ./setup.sh
+./run.sh
 ```
 
 ## What this shows

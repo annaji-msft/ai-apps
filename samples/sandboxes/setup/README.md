@@ -13,7 +13,7 @@ Pick the flow that matches the surface you want to use:
 | Flow | Folder | When to use |
 |------|--------|-------------|
 | **Python SDK** | [`python/`](./python/) | You'll mostly run the Python guides. Needs Python 3.10+ + pip. |
-| **`aca` CLI**  | [`cli/`](./cli/)       | You'll mostly run the CLI guides. **No Python required** - bash on Linux/macOS, PowerShell on Windows. |
+| **`aca` CLI**  | [`cli/`](./cli/)       | You'll mostly run the CLI guides. **No Python required** — bash on Linux, macOS, or Windows (Git Bash / WSL / MSYS2). |
 
 Both flows write the same six keys to `samples/.env`
 (`AZURE_SUBSCRIPTION_ID`, `ACA_SUBSCRIPTION`, `ACA_RESOURCE_GROUP`,
@@ -28,19 +28,14 @@ pip install -r requirements.txt
 python setup.py
 ```
 
-## Quickstart - CLI (bash)
+## Quickstart - CLI
 
 ```bash
 cd cli
 ./setup.sh
 ```
 
-## Quickstart - CLI (PowerShell)
-
-```powershell
-cd cli
-.\setup.ps1
-```
+> On Windows, run from Git Bash, WSL, MSYS2 — any shell with `bash`.
 
 ## Teardown
 
@@ -48,8 +43,7 @@ Use whichever folder you set up from:
 
 ```bash
 python python/teardown.py            # or: python/teardown.py --yes
-./cli/teardown.sh                    # or: ./cli/teardown.sh --yes
-.\cli\teardown.ps1                   # or: .\cli\teardown.ps1 --yes
+./cli/teardown.sh              # or: ./cli/teardown.sh --yes
 ```
 
 All three delete the sandbox group and the resource group.

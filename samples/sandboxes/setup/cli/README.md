@@ -13,7 +13,7 @@ via `samples/.env`; run one or both in any order.
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
   installed and `az login` completed
-- Bash 4+ (Linux/macOS) **or** PowerShell 5+ (Windows / pwsh anywhere)
+- Bash (Linux/macOS, or Git Bash / WSL on Windows)
 - A subscription where you can create resource groups and assign roles
 
 The script will install the [`aca` CLI](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md)
@@ -22,14 +22,10 @@ for you if it's not already on PATH.
 ## Run
 
 ```bash
-# Linux / macOS
 ./setup.sh
 ```
 
-```powershell
-# Windows / pwsh
-.\setup.ps1
-```
+> On Windows, run from Git Bash, WSL, MSYS2 — any shell with `bash`.
 
 Defaults (override with environment variables):
 
@@ -40,22 +36,13 @@ Defaults (override with environment variables):
 | `ACA_SANDBOX_GROUP` | `ai-apps-samples-group` |
 | `ACA_SANDBOXGROUP_REGION` | `westus2` |
 
-> The `aca` install script writes to `~/.aca/bin` and edits your user
-> PATH. To pick up the change in your *current* shell after a fresh
-> install, either restart the terminal or add `~/.aca/bin` to `PATH`
-> manually. This setup script augments PATH for itself so the
-> subsequent `aca` calls work in the same run.
+> The `aca` install script writes to `~/.aca/bin` and edits your shell PATH. To pick up the change in your *current* shell after a fresh install, restart the terminal or add `~/.aca/bin` to `PATH` manually. This setup script augments PATH for itself so the subsequent `aca` calls work in the same run.
 
 ## Teardown
 
 ```bash
 ./teardown.sh            # asks for confirmation
 ./teardown.sh --yes      # no prompt
-```
-
-```powershell
-.\teardown.ps1
-.\teardown.ps1 --yes
 ```
 
 Deletes the sandbox group and the resource group (everything in it).

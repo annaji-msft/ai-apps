@@ -1,9 +1,9 @@
-# 01 - Getting started (Python)
+# 01 - Sandboxes (Python)
 
 ```bash
 # One-time, from samples/sandboxes/setup/python/:  python setup.py
 pip install -r requirements.txt
-python getting_started.py
+python sandboxes.py
 ```
 
 ## What this shows

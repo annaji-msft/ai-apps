@@ -2,7 +2,6 @@
 
 ```bash
 ./run.sh
-./run.ps1
 ```
 
 ## What this shows

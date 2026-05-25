@@ -11,7 +11,8 @@ Creates (all idempotent):
 Writes ``samples/.env`` so every guide can find the configuration.
 
 This script does NOT install or configure the ``aca`` CLI — for that,
-use ``../cli/setup.sh`` (Linux/macOS) or ``..\\cli\\setup.ps1`` (Windows).
+use ``../cli/setup.sh`` — bash runs on Linux, macOS, and Windows
+(Git Bash / WSL / MSYS2).
 The two flows share state via ``samples/.env``; run one or both in any order.
 
 Prerequisites:
@@ -209,7 +210,7 @@ def main() -> None:
 
     print("==> Done.")
     print()
-    print("Next:  cd ../../guides/01-getting-started/python && python getting_started.py")
+    print("Next:  cd ../../guides/01-sandboxes/python && python sandboxes.py")
 
 
 if __name__ == "__main__":

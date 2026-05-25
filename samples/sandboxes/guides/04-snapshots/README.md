@@ -4,7 +4,7 @@ Capture sandbox state as a snapshot, then boot a new sandbox from it
 and verify the data is preserved.
 
 - [`python/`](python/) - Python SDK
-- [`cli/`](cli/) - `aca` CLI (bash + PowerShell)
+- [`cli/`](cli/) - `aca` CLI (bash)
 
 ## What it does
 

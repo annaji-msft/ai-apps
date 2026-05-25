@@ -2,7 +2,7 @@
 
 > Runnable samples and reference scenarios for building AI-native applications
 > on Azure Container Apps. Five pillars: sandboxes, apps, connectors, triggers,
-> and ai-app-workloads (cross-pillar). Every sample is self-contained — `cd`
+> and ai-apps (cross-pillar). Every sample is self-contained — `cd`
 > into a folder, install its requirements.txt, run.
 
 See [AGENTS.md](AGENTS.md) for idioms and conventions when generating code
@@ -12,11 +12,11 @@ that uses these samples.
 
 - [Sandboxes setup](sandboxes/setup/README.md): Provisions resource group +
   sandbox group + RBAC. Run `setup/python/setup.py` (Python SDK flow) **or**
-  `setup/cli/setup.sh` / `setup.ps1` (CLI flow, no Python). Writes `samples/.env`.
+  `setup/cli/setup.sh` (CLI flow, no Python). Writes `samples/.env`.
 
 ## Sandboxes — guides (one capability per script)
 
-- [01-getting-started](sandboxes/guides/01-getting-started/README.md):
+- [01-sandboxes](sandboxes/guides/01-sandboxes/README.md):
   Create a sandbox, run a shell command, delete the sandbox. Python + CLI.
 - [02-files](sandboxes/guides/02-files/README.md):
   `write_file` / `read_file` / `stat_file` / `list_files` / `mkdir` / `delete_file`. Python + CLI.
@@ -42,6 +42,8 @@ that uses these samples.
   `azure.containerapps.sandbox.aio` + `asyncio.gather` for concurrent operations. Python only.
 - [13-managed-identity](sandboxes/guides/13-managed-identity/README.md):
   SystemAssigned identity on a sandbox group — foundation for agent inception. Python + CLI.
+- [14-interactive-shell](sandboxes/guides/14-interactive-shell/README.md):
+  `aca sandbox shell` — interactive PTY session into a running sandbox. CLI only.
 
 ## Sandboxes — scenarios (composed use cases)
 
@@ -57,7 +59,7 @@ that uses these samples.
 
 ## Apps
 
-Coming in Phase 4. See [apps/README.md](apps/README.md).
+Coming in Phase 4. See [containerapps/README.md](containerapps/README.md).
 
 ## Connectors
 
@@ -69,7 +71,7 @@ Coming in Phase 7. See [triggers/README.md](triggers/README.md).
 
 ## AI app workloads
 
-Coming in Phase 8. See [ai-app-workloads/README.md](ai-app-workloads/README.md).
+Coming in Phase 8. See [ai-apps/README.md](ai-apps/README.md).
 
 ## Reference
 

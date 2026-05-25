@@ -4,7 +4,7 @@ Expose a port on a sandbox and hit it from outside. Demonstrates
 `add_port(anonymous=True)` and `remove_port`.
 
 - [`python/`](python/) - Python SDK
-- [`cli/`](cli/) - `aca` CLI (bash + PowerShell)
+- [`cli/`](cli/) - `aca` CLI (bash)
 
 ## What it does
 

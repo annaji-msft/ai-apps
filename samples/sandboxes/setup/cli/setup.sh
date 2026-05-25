@@ -119,6 +119,9 @@ echo "==> Writing $ENV_FILE..."
 declare -A EXISTING
 if [[ -f "$ENV_FILE" ]]; then
     while IFS='=' read -r k v; do
+        # strip whitespace and CR from key
+        k="${k//$'\r'/}"
+        k="${k%% *}"
         [[ -z "$k" || "${k:0:1}" == "#" ]] && continue
         EXISTING["$k"]="$v"
     done < "$ENV_FILE"
@@ -145,4 +148,4 @@ echo "==> aca doctor ..."
 aca doctor || true
 
 echo "==> Done."
-echo "    Next: cd ../../guides/01-getting-started/cli && ./run.sh"
+echo "    Next: cd ../../guides/01-sandboxes/cli && ./run.sh"
