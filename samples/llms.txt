@@ -15,14 +15,20 @@ that uses these samples.
 
 ## Sandboxes — guides (one capability per script)
 
-(Catalog populated as guides ship — see [roadmap](sandboxes/README.md).)
-
 - [01-getting-started](sandboxes/guides/01-getting-started/README.md):
-  Create a sandbox, run a shell command, delete the sandbox.
+  Create a sandbox, run a shell command, delete the sandbox. Python + CLI.
+- [02-files](sandboxes/guides/02-files/README.md):
+  `write_file` / `read_file` / `stat_file` / `list_files` / `mkdir` / `delete_file`. Python + CLI.
+- [03-ports](sandboxes/guides/03-ports/README.md):
+  `add_port(anonymous=True)`, fetch the public URL, `remove_port`. Python + CLI.
+- [04-snapshots](sandboxes/guides/04-snapshots/README.md):
+  `create_snapshot`, boot a new sandbox from the snapshot, verify state preserved. Python + CLI.
 
 ## Sandboxes — scenarios (composed use cases)
 
-(Catalog populated as scenarios ship.)
+- [web-app-deployment](sandboxes/scenarios/web-app-deployment/README.md):
+  Upload a Node.js HTTP server, start it, expose port 8080 publicly,
+  fetch from your laptop. Composes files + exec + ports. Python + CLI.
 
 ## Apps
 

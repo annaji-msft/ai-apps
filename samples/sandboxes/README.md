@@ -26,10 +26,10 @@ and how to override defaults.
 
 | # | Guide | What it shows | Status |
 |---|---|---|---|
-| 01 | [getting-started](guides/01-getting-started) | Create sandbox, exec command, delete | Phase 1 |
-| 02 | files | write / read / stat / list / mkdir / delete | Phase 1 |
-| 03 | ports | `add_port(anonymous=True)`, hit public URL | Phase 1 |
-| 04 | snapshots | `create_snapshot`, restore into new sandbox | Phase 1 |
+| 01 | [getting-started](guides/01-getting-started) | Create sandbox, exec command, delete | ✅ ready |
+| 02 | [files](guides/02-files) | write / read / stat / list / mkdir / delete | ✅ ready |
+| 03 | [ports](guides/03-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |
+| 04 | [snapshots](guides/04-snapshots) | `create_snapshot`, restore into new sandbox | ✅ ready |
 | 05 | egress | `set_egress_default("Deny")` + host allow rules | Phase 3 |
 | 06 | secrets | upsert / peek / list / delete (group-scoped) | Phase 3 |
 | 07 | volumes | AzureBlob + DataDisk mounts | Phase 3 |
@@ -44,7 +44,7 @@ and how to override defaults.
 
 | Scenario | Composes | Status |
 |---|---|---|
-| [web-app-deployment](scenarios/web-app-deployment) | files + ports + exec | Phase 1 |
+| [web-app-deployment](scenarios/web-app-deployment) | files + ports + exec | ✅ ready |
 | agent-swarm | 2 groups + MI + SDK-in-sandbox inception | Phase 2 |
 | parallel-fan-out | aio SDK + `asyncio.gather` over N sandboxes | Phase 2 |
 | data-pipeline | volumes + 2 sandboxes producer/consumer | Phase 3 |

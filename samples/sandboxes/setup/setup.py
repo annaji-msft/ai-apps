@@ -196,9 +196,11 @@ def main() -> None:
     print(f"==> Writing {ENV_FILE.relative_to(SAMPLES_DIR.parent)}...")
     _write_env_file({
         "AZURE_SUBSCRIPTION_ID": subscription_id,
+        "ACA_SUBSCRIPTION": subscription_id,
         "ACA_RESOURCE_GROUP": resource_group,
         "ACA_SANDBOX_GROUP": sandbox_group,
         "ACA_SANDBOXGROUP_REGION": region,
+        "ACA_REGION": region,
     })
 
     # Brief wait so role propagation completes before the first sample runs.
