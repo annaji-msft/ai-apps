@@ -29,6 +29,12 @@ that uses these samples.
 - [web-app-deployment](sandboxes/scenarios/web-app-deployment/README.md):
   Upload a Node.js HTTP server, start it, expose port 8080 publicly,
   fetch from your laptop. Composes files + exec + ports. Python + CLI.
+- [parallel-fan-out](sandboxes/scenarios/parallel-fan-out/README.md):
+  Run the same task on N sandboxes concurrently via the async SDK +
+  `asyncio.gather`. Python only.
+- [agent-swarm](sandboxes/scenarios/agent-swarm/README.md):
+  Orchestrator dispatches mapper + reducer roles across a swarm of
+  sandboxes (MapReduce-shaped). Python only.
 
 ## Apps
 

@@ -40,11 +40,13 @@ and how to override defaults.
 | 12 | async | `aio` SDK + `asyncio.gather` basics | Phase 3 |
 | 13 | managed-identity | SystemAssigned / UserAssigned identity on group | Phase 3 |
 
-### Scenarios — composed use cases (with production tips)| Scenario | Composes | Status |
+### Scenarios — composed use cases (with production tips)
+
+| Scenario | Composes | Status |
 |---|---|---|
 | [web-app-deployment](scenarios/web-app-deployment) | files + ports + exec | ✅ ready |
-| agent-swarm | 2 groups + MI + SDK-in-sandbox inception | Phase 2 |
-| parallel-fan-out | aio SDK + `asyncio.gather` over N sandboxes | Phase 2 |
+| [agent-swarm](scenarios/agent-swarm) | aio SDK + orchestrator → mapper/reducer roles | ✅ ready |
+| [parallel-fan-out](scenarios/parallel-fan-out) | aio SDK + `asyncio.gather` over N sandboxes | ✅ ready |
 | data-pipeline | volumes + 2 sandboxes producer/consumer | Phase 3 |
 | checkpoint-rollback | snapshot before risky op → restore on failure | Phase 3 |
 | golden-image-workflow | custom disk → boot → configure → commit → reuse | Phase 3 |
