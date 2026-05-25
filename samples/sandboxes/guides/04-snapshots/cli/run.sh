@@ -44,6 +44,12 @@ echo "==> Creating snapshot '$SNAP_NAME'..."
 aca sandbox snapshot --id "$SANDBOX_A" --name "$SNAP_NAME"
 sleep 5
 
+echo "==> List snapshots in this group:"
+aca sandboxgroup snapshot list
+
+echo "==> Get the snapshot we just created:"
+aca sandboxgroup snapshot get --selector "name=$SNAP_NAME"
+
 echo "==> Creating sandbox B from snapshot..."
 SANDBOX_B="$(aca sandbox create --snapshot "$SNAP_NAME" | sed -n 's/^Created sandbox: //p' | tail -n1)"
 echo "    B: $SANDBOX_B"

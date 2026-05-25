@@ -83,4 +83,11 @@ fi
 echo "--- advanced exec ---"
 aca sandbox exec --id "$ADVANCED_ID" -c 'echo $GREETING && nproc && free -m | head -n2'
 
+# ----- list + get (create / list / get convention) -----
+echo "==> List sandboxes in this group:"
+aca sandbox list
+
+echo "==> Get details for advanced sandbox:"
+aca sandbox get --id "$ADVANCED_ID"
+
 echo "==> Done."

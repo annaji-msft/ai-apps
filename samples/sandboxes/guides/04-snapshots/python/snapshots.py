@@ -63,6 +63,17 @@ def main() -> None:
         # Give the snapshot a moment to settle before restoring from it.
         time.sleep(5)
 
+        # ----- list + get (create / list / get convention) -----
+        print("==> list_snapshots() in this group:")
+        for s in client.list_snapshots():
+            marker = "  <-- just created" if s.id == snap_id else ""
+            label = s.labels.get("name", "")
+            print(f"    - {s.id}  name={label}  size={s.resources}{marker}")
+
+        print(f"==> get_snapshot({snap_id}):")
+        detail = client.get_snapshot(snap_id)
+        print(f"    sandbox_id={detail.sandbox_id}  created={detail.created_at_utc}")
+
         print("==> Creating sandbox B from snapshot...")
         sandbox_b = client.begin_create_sandbox(snapshot_id=snap_id).result()
         print(f"    B: {sandbox_b.sandbox_id}")

@@ -109,6 +109,27 @@ def main() -> None:
             "advanced exec",
             advanced.exec("echo $GREETING && nproc && free -m | head -n2"),
         )
+
+        # ----------------------------------------------------------------
+        # List + get (the create / list / get convention).
+        # ----------------------------------------------------------------
+        print("==> list_sandboxes() in this group:")
+        for s in client.list_sandboxes():
+            marker = ""
+            if s.id == basic.sandbox_id:
+                marker = "  <-- basic"
+            elif s.id == advanced.sandbox_id:
+                marker = "  <-- advanced"
+            print(f"    - {s.id}  state={s.state or '?'}{marker}")
+
+        print(f"==> get_sandbox({advanced.sandbox_id}):")
+        detail = client.get_sandbox(advanced.sandbox_id)
+        res = detail.resources
+        print(
+            f"    cpu={res.cpu if res else '?'}  "
+            f"memory={res.memory if res else '?'}  "
+            f"labels={detail.labels or '(none)'}"
+        )
     finally:
         if basic is not None:
             print(f"==> Deleting basic sandbox {basic.sandbox_id}...")

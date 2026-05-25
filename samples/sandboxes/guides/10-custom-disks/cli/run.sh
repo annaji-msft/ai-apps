@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Custom disk image - build from a public container image and boot from it.
+#
+# Demonstrates the create / list / get convention on disk images, then
+# boots a sandbox from the custom disk and verifies it's Alpine.
+
 set -euo pipefail
 
 dir="$(cd "$(dirname "$0")" && pwd)"
@@ -6,26 +11,50 @@ while [[ "$dir" != "/" && ! -f "$dir/.env" ]]; do dir="$(dirname "$dir")"; done
 [[ -f "$dir/.env" ]] && { set -a; . "$dir/.env"; set +a; }
 
 DISK="alpine-cli-$(date +%s)"
-SLABEL="cdisk-cli-$$"
+DID=""
+SID=""
 
 cleanup() {
-  SID=$(aca sandbox list -l "name=$SLABEL" -o json 2>/dev/null | python -c "import sys,json;d=json.load(sys.stdin);print(d[0]['id'] if d else '')")
-  [[ -n "$SID" ]] && aca sandbox delete --id "$SID" >/dev/null 2>&1 || true
-  DID=$(aca sandboxgroup disk list -o json 2>/dev/null | python -c "import sys,json;d=json.load(sys.stdin);print(next((i['id'] for i in d if i.get('labels',{}).get('name')==\"$DISK\"),''))")
-  [[ -n "$DID" ]] && aca sandboxgroup disk delete --id "$DID" >/dev/null 2>&1 || true
+    if [[ -n "$SID" ]]; then
+        echo "==> Deleting sandbox $SID..."
+        aca sandbox delete --id "$SID" --yes >/dev/null 2>&1 || true
+    fi
+    if [[ -n "$DID" ]]; then
+        echo "==> Deleting disk image $DID..."
+        aca sandboxgroup disk delete --id "$DID" --yes >/dev/null 2>&1 || true
+    fi
 }
 trap cleanup EXIT
 
-echo "==> Building disk image $DISK from alpine:3.19 (5-10 min)..."
-aca sandboxgroup disk create --image docker.io/library/alpine:3.19 --name "$DISK"
+echo "==> Public disk images (use these names as --disk values):"
+aca sandboxgroup disk list-public
 
-echo "==> Listing disks:"
+echo "==> Building disk image '$DISK' from alpine:3.19 (5-10 min)..."
+CREATE_OUTPUT="$(aca sandboxgroup disk create --image docker.io/library/alpine:3.19 --name "$DISK")"
+echo "$CREATE_OUTPUT"
+# `disk create` returns JSON; the first "id" field is the disk image id.
+DID="$(echo "$CREATE_OUTPUT" | sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' | head -n1)"
+if [[ -z "$DID" ]]; then
+    echo "error: could not parse disk image id from create output" >&2
+    exit 1
+fi
+
+echo "==> Listing your private disk images:"
 aca sandboxgroup disk list
 
-echo "==> Boot sandbox from $DISK ..."
-aca sandbox create --disk "$DISK" --labels "name=$SLABEL" >/dev/null
-SID=$(aca sandbox list -l "name=$SLABEL" -o json | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")
-echo "    sandbox: $SID"
+echo "==> Get details for '$DISK':"
+aca sandboxgroup disk get --id "$DID"
 
-echo "==> cat /etc/alpine-release ..."
+# Private/custom disks must be referenced by --disk-id; --disk is for
+# public images only (see `aca sandboxgroup disk list-public`).
+echo "==> Booting sandbox from disk-id $DID..."
+CREATE_OUTPUT="$(aca sandbox create --disk-id "$DID")"
+echo "$CREATE_OUTPUT"
+SID="$(echo "$CREATE_OUTPUT" | sed -n 's/^Created sandbox: //p' | tail -n1)"
+if [[ -z "$SID" ]]; then
+    echo "error: could not parse sandbox id from create output" >&2
+    exit 1
+fi
+
+echo "==> Verifying - should be Alpine:"
 aca sandbox exec --id "$SID" -c "cat /etc/alpine-release"

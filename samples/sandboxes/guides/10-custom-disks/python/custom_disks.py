@@ -54,7 +54,12 @@ def main() -> None:
     sandbox = None
 
     try:
-        print(f"==> begin_create_disk_image({BASE_IMAGE!r}, name={disk_name!r})...")
+        # ----- list-public (discovery: what disks can `disk="..."` accept?) -----
+        print("==> Public disk images (use these names as `disk=...` on create):")
+        for img in client.list_public_disk_images():
+            print(f"    - {img.name}")
+
+        print(f"\n==> begin_create_disk_image({BASE_IMAGE!r}, name={disk_name!r})...")
         print("    (this can take 5-10 minutes the first time)")
         poller = client.begin_create_disk_image(
             BASE_IMAGE, name=disk_name, polling_timeout=900,
@@ -62,6 +67,17 @@ def main() -> None:
         disk = poller.result()
         disk_image_id = disk.id
         print(f"    built: id={disk.id}  state={disk.status.state if disk.status else '?'}")
+
+        # ----- list + get (create / list / get convention) -----
+        print(f"\n==> list_disk_images() - your private disks in this group:")
+        for img in client.list_disk_images():
+            marker = "  <-- just created" if img.id == disk_image_id else ""
+            print(f"    - {img.id}  name={img.name or img.labels.get('name', '')}{marker}")
+
+        print(f"\n==> get_disk_image({disk_image_id}):")
+        detail = client.get_disk_image(disk_image_id)
+        print(f"    state:  {detail.status.state if detail.status else '?'}")
+        print(f"    source: {detail.image.base if detail.image else '?'}")
 
         print(f"\n==> begin_create_sandbox(disk_id={disk.id})...")
         sandbox = client.begin_create_sandbox(disk_id=disk.id, labels={"guide": "custom-disk"}).result()
