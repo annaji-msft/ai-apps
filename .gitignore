@@ -10,3 +10,10 @@ __pycache__/
 # Sample configuration written by setup scripts (machine-local)
 samples/.env
 
+# Local provider config for sandbox-agents scenarios (secrets)
+samples/sandboxes/scenarios/08-sandbox-agents/*/provider_config.py
+
+
+# Per-run demo artifacts (logs, traces, per-run answers)
+samples/sandboxes/scenarios/08-sandbox-agents/openai/*/.run-output/
+samples/sandboxes/scenarios/08-sandbox-agents/openai/*/*.log
