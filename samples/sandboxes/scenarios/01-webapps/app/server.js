@@ -1,27 +1,94 @@
-// Tiny Node HTTP server used by both webapp variants in scenarios/01-webapps.
-// No external dependencies — uses the built-in `http` and `os` modules so the
-// sandbox doesn't need `npm install` before starting.
+// Node HTTP server used by both webapp variants in scenarios/01-webapps.
+// Zero external dependencies — uses built-in http/os/fs so the sandbox
+// doesn't need `npm install` before starting.
 //
-//   GET /            -> HTML landing page ("Hello from a sandbox")
-//   GET /healthz     -> { status: "ok" }
-//   GET /api/hello   -> { message, hostname, uptime, pid }
-//   GET /api/info    -> { node, platform, arch, memory }
+//   GET /                 -> HTML landing page ("Hello from a sandbox")
+//   GET /healthz          -> { status: "ok" }
+//   GET /api/hello        -> { message, hostname, uptime, pid }
+//   GET /api/info         -> { node, platform, arch, cpus, memoryMB, startedAt }
+//   GET /api/sysinfo      -> uname-style { hostname, kernel, osRelease, arch,
+//                            distro, cpuModel, cpus, totalMemMB, nodeVersion, ip }
+//   GET /api/stats        -> live { uptime, loadavg, cpus, memTotalMB, memFreeMB,
+//                            memUsedPct, procCount, serverUptime, serverPid }
+//   GET /api/processes    -> top 10 by RSS [{ pid, comm, rssKB, state }]
 
 const http = require('http');
 const os = require('os');
+const fs = require('fs');
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const STARTED_AT = new Date();
 
+// ---------- helpers ----------
+
 function json(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
   res.end(JSON.stringify(body, null, 2) + '\n');
 }
 
 function html(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
   res.end(body);
 }
+
+function safeRead(path) {
+  try { return fs.readFileSync(path, 'utf8').trim(); } catch (_) { return ''; }
+}
+
+function readDistro() {
+  const txt = safeRead('/etc/os-release');
+  if (!txt) return '';
+  const m = txt.match(/^PRETTY_NAME="?([^"\n]+)"?/m);
+  return m ? m[1] : '';
+}
+
+function primaryIp() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const a of ifaces[name] || []) {
+      if (a.family === 'IPv4' && !a.internal) return a.address;
+    }
+  }
+  return '127.0.0.1';
+}
+
+function procCount() {
+  try {
+    return fs.readdirSync('/proc').filter((n) => /^\d+$/.test(n)).length;
+  } catch (_) { return 0; }
+}
+
+function topProcesses(limit) {
+  let pids = [];
+  try {
+    pids = fs.readdirSync('/proc').filter((n) => /^\d+$/.test(n));
+  } catch (_) { return []; }
+
+  const rows = [];
+  for (const pid of pids) {
+    const status = safeRead(`/proc/${pid}/status`);
+    if (!status) continue;
+    const comm = safeRead(`/proc/${pid}/comm`) || '?';
+    const rssMatch = status.match(/^VmRSS:\s+(\d+)\s+kB/m);
+    const stateMatch = status.match(/^State:\s+(\S+)/m);
+    rows.push({
+      pid: parseInt(pid, 10),
+      comm,
+      rssKB: rssMatch ? parseInt(rssMatch[1], 10) : 0,
+      state: stateMatch ? stateMatch[1] : '?',
+    });
+  }
+  rows.sort((a, b) => b.rssKB - a.rssKB);
+  return rows.slice(0, limit);
+}
+
+// ---------- payload builders ----------
 
 function hello() {
   return {
@@ -43,189 +110,441 @@ function info() {
   };
 }
 
+function sysinfo() {
+  const cpus = os.cpus();
+  return {
+    hostname: os.hostname(),
+    kernel: safeRead('/proc/sys/kernel/ostype') || os.type(),
+    osRelease: safeRead('/proc/sys/kernel/osrelease') || os.release(),
+    arch: os.arch(),
+    distro: readDistro() || 'unknown',
+    cpuModel: (cpus[0] && cpus[0].model) ? cpus[0].model.trim() : 'unknown',
+    cpus: cpus.length,
+    totalMemMB: Math.round(os.totalmem() / 1024 / 1024),
+    nodeVersion: process.version,
+    ip: primaryIp(),
+  };
+}
+
+function stats() {
+  const total = os.totalmem();
+  const free = os.freemem();
+  return {
+    uptime: Math.round(os.uptime()),
+    loadavg: os.loadavg().map((n) => Math.round(n * 100) / 100),
+    cpus: os.cpus().length,
+    memTotalMB: Math.round(total / 1024 / 1024),
+    memFreeMB: Math.round(free / 1024 / 1024),
+    memUsedPct: Math.round(((total - free) / total) * 1000) / 10,
+    procCount: procCount(),
+    serverUptime: Math.round(process.uptime()),
+    serverPid: process.pid,
+  };
+}
+
+// ---------- HTML landing page ----------
+
 function page() {
   const h = hello();
-  const i = info();
+  const s = sysinfo();
   return `<!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hello from an Azure Container Apps sandbox</title>
+<title>Hello from a sandbox · Azure Container Apps</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: { 950: '#070a1a', 900: '#0b1020', 850: '#0f1530', 800: '#141a3a' },
+          brand: { 400: '#7aa2ff', 500: '#5b8cff', 600: '#3b6bff' },
+        },
+        fontFamily: {
+          mono: ['ui-monospace','SFMono-Regular','Menlo','Consolas','monospace'],
+        },
+      }
+    }
+  }
+</script>
 <style>
-  :root {
-    --bg: #0b1020;
-    --bg-2: #11183a;
-    --fg: #e7ecff;
-    --muted: #9aa6d6;
-    --accent: #6ea8ff;
-    --accent-2: #b388ff;
-    --card: rgba(255,255,255,0.04);
-    --border: rgba(255,255,255,0.08);
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    color: var(--fg);
-    background: radial-gradient(1200px 600px at 10% -10%, #1d2761 0%, transparent 60%),
-                radial-gradient(900px 500px at 110% 110%, #3b1a66 0%, transparent 55%),
-                linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
-    min-height: 100vh;
-  }
-  .wrap { max-width: 920px; margin: 0 auto; padding: 56px 24px 80px; }
-  header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
-  .logo {
-    width: 44px; height: 44px; border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    display: grid; place-items: center; font-weight: 800; color: #0b1020;
-  }
-  .badge {
-    margin-left: auto;
-    font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--muted);
-    border: 1px solid var(--border); border-radius: 999px;
-    padding: 6px 12px;
-  }
-  h1 {
-    font-size: clamp(28px, 4.5vw, 44px);
-    line-height: 1.1; margin: 0 0 8px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
-  .lede { color: var(--muted); font-size: 18px; margin: 0 0 28px; max-width: 70ch; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 18px 0 36px; }
-  .card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-    padding: 16px 18px;
-  }
-  .card .k { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .card .v { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px; word-break: break-all; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
-  @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
-  .panel {
-    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 22px;
-  }
-  .panel h2 { margin: 0 0 10px; font-size: 18px; }
-  .panel p, .panel li { color: var(--muted); margin: 6px 0; }
-  code, pre {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
-  }
-  pre {
-    background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 16px; overflow-x: auto; color: var(--fg);
-  }
-  a { color: var(--accent); }
-  .endpoints { display: grid; gap: 8px; }
-  .ep {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
-    background: rgba(0,0,0,0.2);
-  }
-  .ep .m { font-weight: 700; color: var(--accent); width: 44px; }
-  .ep a { color: var(--fg); text-decoration: none; font-family: ui-monospace, monospace; }
-  .ep a:hover { color: var(--accent); }
-  .ep .d { margin-left: auto; color: var(--muted); font-size: 13px; }
-  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,0.7);
-    animation: pulse 1.8s infinite; vertical-align: middle; margin-right: 8px; }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.6); } 70% { box-shadow: 0 0 0 12px rgba(74,222,128,0); } 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
-  footer { margin-top: 36px; color: var(--muted); font-size: 13px; text-align: center; }
-  footer a { color: var(--muted); }
+  body { background: radial-gradient(1200px 600px at 10% -10%, #1e2a6b 0%, transparent 60%),
+                     radial-gradient(900px 500px at 110% 10%, #2a1e6b 0%, transparent 55%),
+                     #070a1a; }
+  .card { background: rgba(20, 26, 58, 0.65); backdrop-filter: blur(8px); }
+  .pulse-dot { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+  pre { tab-size: 2; }
 </style>
 </head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="logo">A</div>
-    <div>
-      <div style="font-weight:700">Azure Container Apps</div>
-      <div style="color:var(--muted); font-size:13px">Sandbox demo</div>
-    </div>
-    <div class="badge"><span class="pulse"></span>live</div>
-  </header>
+<body class="min-h-full text-slate-100 font-sans antialiased">
 
-  <h1>Hello from a sandbox 👋</h1>
-  <p class="lede">
-    This page is being served by a tiny Node.js process running inside an
-    Azure Container Apps <strong>sandbox</strong> — an isolated, ephemeral
-    micro-VM you can boot in seconds, expose ports from, push files into,
-    and tear down when you're done. No cluster, no Dockerfile, no YAML.
+<!-- Header -->
+<header class="border-b border-white/5">
+  <div class="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="size-9 rounded-lg bg-gradient-to-br from-brand-400 to-fuchsia-500 grid place-items-center text-ink-950 font-bold">A</div>
+      <div>
+        <div class="text-sm text-slate-400">Azure Container Apps</div>
+        <div class="font-semibold tracking-tight">Sandbox · live demo</div>
+      </div>
+    </div>
+    <nav class="flex items-center gap-3 text-sm">
+      <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
+         class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">Portal ↗</a>
+      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps"
+         target="_blank" rel="noopener"
+         class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="mx-auto max-w-6xl px-6 pt-16 pb-10">
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 text-emerald-400 px-3 py-1 ring-1 ring-emerald-500/30">
+      <span class="size-1.5 rounded-full bg-emerald-400 pulse-dot"></span> live · responding
+    </span>
+    <span class="rounded-full bg-white/5 text-slate-300 px-3 py-1 ring-1 ring-white/10 font-mono">
+      ${h.hostname} · up <span id="hero-uptime">${h.uptime}</span>s
+    </span>
+  </div>
+  <h1 class="mt-5 text-5xl sm:text-6xl font-bold tracking-tight">
+    Hello from a sandbox <span class="inline-block">👋</span>
+  </h1>
+  <p class="mt-4 max-w-2xl text-lg text-slate-300">
+    This page is being served from an <em>ephemeral, isolated VM</em> spun up by Azure
+    Container Apps Sandboxes. Everything below — kernel, CPU, memory, processes —
+    is read live from inside it.
   </p>
-
-  <div class="grid">
-    <div class="card"><div class="k">message</div><div class="v">${h.message}</div></div>
-    <div class="card"><div class="k">hostname</div><div class="v">${h.hostname}</div></div>
-    <div class="card"><div class="k">uptime (s)</div><div class="v" id="uptime">${h.uptime}</div></div>
-    <div class="card"><div class="k">pid</div><div class="v">${h.pid}</div></div>
-    <div class="card"><div class="k">node</div><div class="v">${i.node}</div></div>
-    <div class="card"><div class="k">platform / arch</div><div class="v">${i.platform} / ${i.arch}</div></div>
-    <div class="card"><div class="k">cpus</div><div class="v">${i.cpus}</div></div>
-    <div class="card"><div class="k">memory</div><div class="v">${i.memoryMB} MB</div></div>
+  <div class="mt-7 flex flex-wrap gap-3">
+    <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
+       class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-brand-500 to-fuchsia-500 px-5 py-2.5 font-semibold text-white shadow-lg shadow-brand-600/30 hover:opacity-95 transition">
+      Open the portal → sandboxes.azure.com
+    </a>
+    <a href="#get-started"
+       class="inline-flex items-center gap-2 rounded-lg bg-white/5 ring-1 ring-white/10 px-5 py-2.5 font-medium hover:bg-white/10 transition">
+      Get started in 30 seconds
+    </a>
   </div>
+</section>
 
-  <div class="row">
-    <div class="panel">
-      <h2>What is a sandbox?</h2>
-      <p>
-        A sandbox is a managed, single-tenant micro-VM with a public-disk root
-        filesystem. It boots in seconds, runs anything you can run in Linux,
-        and gives you simple primitives: <code>exec</code>, <code>write_file</code>,
-        <code>add_port</code>, <code>add_volume_mount</code>, and friends.
-      </p>
-      <p>
-        It's the right tool when you want code execution that's
-        <em>fast</em>, <em>isolated</em>, and <em>disposable</em> — agent
-        tool-use, code interpreters, per-PR preview envs, untrusted user code.
+<!-- System info (uname) -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">System info <span class="font-normal normal-case text-slate-500">(uname -a + os-release)</span></h2>
+  <div class="card rounded-2xl ring-1 ring-white/10 p-6">
+    <dl class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-4 text-sm">
+      <div><dt class="text-slate-400">Hostname</dt><dd class="font-mono mt-0.5">${s.hostname}</dd></div>
+      <div><dt class="text-slate-400">Distro</dt><dd class="font-mono mt-0.5">${s.distro}</dd></div>
+      <div><dt class="text-slate-400">Kernel</dt><dd class="font-mono mt-0.5">${s.kernel} ${s.osRelease}</dd></div>
+      <div><dt class="text-slate-400">Arch</dt><dd class="font-mono mt-0.5">${s.arch}</dd></div>
+      <div class="md:col-span-2"><dt class="text-slate-400">CPU</dt><dd class="font-mono mt-0.5 truncate" title="${s.cpuModel}">${s.cpuModel}</dd></div>
+      <div><dt class="text-slate-400">vCPUs</dt><dd class="font-mono mt-0.5">${s.cpus}</dd></div>
+      <div><dt class="text-slate-400">Memory</dt><dd class="font-mono mt-0.5">${s.totalMemMB} MB</dd></div>
+      <div><dt class="text-slate-400">Node</dt><dd class="font-mono mt-0.5">${s.nodeVersion}</dd></div>
+      <div><dt class="text-slate-400">Internal IP</dt><dd class="font-mono mt-0.5">${s.ip}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- Live stats -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Live stats</h2>
+    <div class="text-xs text-slate-500">refreshes every 2s · <span id="stats-fresh" class="text-emerald-400">●</span></div>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="card rounded-2xl ring-1 ring-white/10 p-5">
+      <div class="text-xs text-slate-400 uppercase tracking-wider">CPU load</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <div class="text-3xl font-bold tabular-nums" id="cpu-1m">—</div>
+        <div class="text-xs text-slate-400">1m</div>
+      </div>
+      <div class="mt-1 text-xs text-slate-400 tabular-nums">
+        5m <span id="cpu-5m" class="text-slate-200">—</span> ·
+        15m <span id="cpu-15m" class="text-slate-200">—</span> ·
+        <span id="cpu-count" class="text-slate-200">—</span> vCPUs
+      </div>
+      <div class="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
+        <div id="cpu-bar" class="h-full bg-gradient-to-r from-brand-500 to-fuchsia-500 transition-all" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl ring-1 ring-white/10 p-5">
+      <div class="text-xs text-slate-400 uppercase tracking-wider">Memory</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <div class="text-3xl font-bold tabular-nums" id="mem-pct">—</div>
+        <div class="text-xs text-slate-400">used</div>
+      </div>
+      <div class="mt-1 text-xs text-slate-400 tabular-nums">
+        <span id="mem-used" class="text-slate-200">—</span> /
+        <span id="mem-total" class="text-slate-200">—</span> MB
+      </div>
+      <div class="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
+        <div id="mem-bar" class="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl ring-1 ring-white/10 p-5">
+      <div class="text-xs text-slate-400 uppercase tracking-wider">Processes</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <div class="text-3xl font-bold tabular-nums" id="proc-count">—</div>
+        <div class="text-xs text-slate-400" id="proc-delta">running</div>
+      </div>
+      <div class="mt-1 text-xs text-slate-400">
+        from <code class="font-mono text-slate-200">/proc/[0-9]*</code>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl ring-1 ring-white/10 p-5">
+      <div class="text-xs text-slate-400 uppercase tracking-wider">Uptime</div>
+      <div class="mt-2 flex items-baseline gap-2">
+        <div class="text-3xl font-bold tabular-nums" id="uptime-pretty">—</div>
+      </div>
+      <div class="mt-1 text-xs text-slate-400 tabular-nums">
+        server <span id="server-up" class="text-slate-200">—</span>s ·
+        pid <span id="server-pid" class="text-slate-200">—</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Top processes -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Top processes <span class="font-normal normal-case text-slate-500">(by RSS, refresh 5s)</span></h2>
+  <div class="card rounded-2xl ring-1 ring-white/10 overflow-hidden">
+    <table class="w-full text-sm font-mono">
+      <thead class="text-xs uppercase text-slate-400 bg-white/5">
+        <tr>
+          <th class="text-left px-5 py-3 w-20">PID</th>
+          <th class="text-left px-5 py-3">Command</th>
+          <th class="text-right px-5 py-3 w-32">RSS</th>
+          <th class="text-left px-5 py-3 w-20">State</th>
+        </tr>
+      </thead>
+      <tbody id="proc-tbody" class="divide-y divide-white/5">
+        <tr><td class="px-5 py-4 text-slate-500" colspan="4">loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Protected access placeholder -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <div class="card rounded-2xl ring-1 ring-amber-500/30 bg-amber-500/5 p-6 flex flex-col md:flex-row md:items-center gap-5">
+    <div class="size-12 shrink-0 rounded-xl bg-amber-500/20 ring-1 ring-amber-500/30 grid place-items-center text-amber-300 text-xl">🔒</div>
+    <div class="flex-1">
+      <h3 class="font-semibold text-amber-100">Protected access (Entra ID)</h3>
+      <p class="text-sm text-amber-100/80 mt-1">
+        Sandboxes can gate any port behind Entra so only specific emails / tenants reach the app.
+        A protected twin of this demo is running — the login experience is being polished;
+        try the anonymous demo above for now.
       </p>
     </div>
-    <div class="panel">
-      <h2>How this page got here</h2>
-      <pre>aca sandbox create --disk node-22
-aca sandbox fs write --path /app/server.js --file server.js
-aca sandbox exec   -c "node /app/server.js &amp;"
-aca sandbox port add --port 8080 --anonymous
-# (or --email you@contoso.com for Entra-gated access)</pre>
-      <p>
-        Full source:
-        <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps" target="_blank" rel="noopener">samples/sandboxes/scenarios/01-webapps</a>.
-      </p>
+    <a href="#" class="text-sm rounded-md bg-white/5 ring-1 ring-white/10 px-3 py-1.5 hover:bg-white/10 transition opacity-60 cursor-not-allowed" title="Coming soon">
+      Sign in (soon) ↗
+    </a>
+  </div>
+</section>
+
+<!-- What is a sandbox -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <div class="card rounded-2xl ring-1 ring-white/10 p-6">
+    <h2 class="text-lg font-semibold">What is a sandbox?</h2>
+    <p class="text-slate-300 mt-2 max-w-3xl">
+      A <strong>sandbox</strong> is an on-demand, isolated Linux VM with its own filesystem,
+      network, and processes. Spin one up in seconds, run anything inside, expose ports
+      publicly or behind Entra, snapshot it, then throw it away. Perfect for agent tool-use,
+      code interpreters, per-PR preview environments, and untrusted user code.
+    </p>
+  </div>
+</section>
+
+<!-- Get started -->
+<section id="get-started" class="mx-auto max-w-6xl px-6 pb-16">
+  <h2 class="text-2xl font-bold tracking-tight">Get started in 30 seconds</h2>
+  <p class="text-slate-400 mt-1">Create a sandbox, exec into it, expose a port. Pick your flavor.</p>
+
+  <div class="mt-5 card rounded-2xl ring-1 ring-white/10 overflow-hidden">
+    <div class="flex border-b border-white/10 text-sm">
+      <button data-tab="cli" class="tab px-5 py-3 font-medium border-b-2 border-brand-400 text-white">CLI</button>
+      <button data-tab="sdk" class="tab px-5 py-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-white">Python SDK</button>
+      <div class="ml-auto px-4 py-2 flex items-center">
+        <button id="copy-btn" class="text-xs rounded-md bg-white/5 ring-1 ring-white/10 px-3 py-1.5 hover:bg-white/10 transition">Copy</button>
+      </div>
     </div>
+    <pre id="snippet-cli" class="tab-pane block p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># install once: pip install azure-sandboxes-cli</span>
+<span class="text-fuchsia-300">aca</span> sandbox create --name my-box --disk node-22
+<span class="text-fuchsia-300">aca</span> sandbox exec   --id my-box -c <span class="text-emerald-300">"uname -a &amp;&amp; echo hi from $(hostname)"</span>
+<span class="text-fuchsia-300">aca</span> sandbox fs write --id my-box --path /app/server.js --file ./server.js
+<span class="text-fuchsia-300">aca</span> sandbox exec   --id my-box -c <span class="text-emerald-300">"cd /app &amp;&amp; nohup node server.js &amp;"</span>
+<span class="text-fuchsia-300">aca</span> sandbox port add --id my-box --port 8080 --anonymous</pre>
+    <pre id="snippet-sdk" class="tab-pane hidden p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># install once: pip install azure-sandboxes</span>
+<span class="text-brand-400">from</span> azure.sandboxes <span class="text-brand-400">import</span> SandboxClient
+
+client = SandboxClient.from_env()
+box    = client.create(name=<span class="text-emerald-300">"my-box"</span>, disk=<span class="text-emerald-300">"node-22"</span>)
+
+<span class="text-brand-400">print</span>(box.exec(<span class="text-emerald-300">"uname -a &amp;&amp; echo hi"</span>).stdout)
+
+box.fs.write(<span class="text-emerald-300">"/app/server.js"</span>, open(<span class="text-emerald-300">"server.js"</span>).read())
+box.exec(<span class="text-emerald-300">"cd /app &amp;&amp; nohup node server.js &amp;"</span>)
+
+url = box.ports.add(<span class="text-amber-300">8080</span>, anonymous=<span class="text-brand-400">True</span>)
+<span class="text-brand-400">print</span>(<span class="text-emerald-300">"live at"</span>, url)</pre>
   </div>
 
-  <div class="panel">
-    <h2>Endpoints on this sandbox</h2>
-    <div class="endpoints">
-      <div class="ep"><span class="m">GET</span><a href="/">/</a><span class="d">this page</span></div>
-      <div class="ep"><span class="m">GET</span><a href="/healthz">/healthz</a><span class="d">liveness probe (JSON)</span></div>
-      <div class="ep"><span class="m">GET</span><a href="/api/hello">/api/hello</a><span class="d">message + uptime (JSON)</span></div>
-      <div class="ep"><span class="m">GET</span><a href="/api/info">/api/info</a><span class="d">runtime + host info (JSON)</span></div>
+  <div class="mt-4 text-sm text-slate-400">
+    Or open <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
+       class="text-brand-400 hover:underline">sandboxes.azure.com</a>
+    and click <em>New sandbox</em> — no CLI required.
+  </div>
+</section>
+
+<!-- Endpoints -->
+<section class="mx-auto max-w-6xl px-6 pb-16">
+  <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Endpoints on this sandbox</h2>
+  <div class="card rounded-2xl ring-1 ring-white/10 divide-y divide-white/5 text-sm font-mono">
+    <a href="/"             class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/</span><span class="text-slate-500">this page</span></a>
+    <a href="/healthz"      class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/healthz</span><span class="text-slate-500">liveness probe</span></a>
+    <a href="/api/hello"    class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/api/hello</span><span class="text-slate-500">message + uptime</span></a>
+    <a href="/api/info"     class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/api/info</span><span class="text-slate-500">runtime + host info</span></a>
+    <a href="/api/sysinfo"  class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/api/sysinfo</span><span class="text-slate-500">uname-style system info</span></a>
+    <a href="/api/stats"    class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/api/stats</span><span class="text-slate-500">live cpu/mem/uptime</span></a>
+    <a href="/api/processes"class="flex items-center gap-4 px-5 py-3 hover:bg-white/5"><span class="text-emerald-400 w-10">GET</span><span class="flex-1">/api/processes</span><span class="text-slate-500">top processes by RSS</span></a>
+  </div>
+</section>
+
+<footer class="border-t border-white/5 mt-8">
+  <div class="mx-auto max-w-6xl px-6 py-6 flex flex-col md:flex-row gap-3 items-center justify-between text-sm text-slate-400">
+    <div>Served from <code class="text-slate-200">${h.hostname}</code> · started <code class="text-slate-200">${STARTED_AT.toISOString()}</code></div>
+    <div class="flex gap-4">
+      <a href="https://sandboxes.azure.com" target="_blank" rel="noopener" class="hover:text-white">sandboxes.azure.com ↗</a>
+      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>
     </div>
   </div>
+</footer>
 
-  <footer>
-    Served from <code>${h.hostname}</code> · uptime <code>${h.uptime}s</code> · started <code>${STARTED_AT.toISOString()}</code>
-  </footer>
-</div>
 <script>
-  // Tick the uptime counter so the page feels alive.
+  // Hero uptime ticker
   (function() {
-    var el = document.getElementById('uptime');
+    var el = document.getElementById('hero-uptime');
     var n = parseInt(el.textContent, 10) || 0;
     setInterval(function() { el.textContent = (++n).toString(); }, 1000);
   })();
+
+  // Pretty uptime (s -> e.g. "2d 4h 13m")
+  function fmtUptime(sec) {
+    sec = Math.max(0, sec | 0);
+    var d = Math.floor(sec / 86400); sec %= 86400;
+    var h = Math.floor(sec / 3600);  sec %= 3600;
+    var m = Math.floor(sec / 60);    var s = sec % 60;
+    if (d) return d + 'd ' + h + 'h ' + m + 'm';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm ' + s + 's';
+    return s + 's';
+  }
+
+  var lastProcCount = null;
+  async function pollStats() {
+    try {
+      var r = await fetch('/api/stats', { cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      var d = await r.json();
+      var cpus = d.cpus || 1;
+      var load1pct = Math.min(100, Math.round((d.loadavg[0] / cpus) * 100));
+      document.getElementById('cpu-1m').textContent = d.loadavg[0].toFixed(2);
+      document.getElementById('cpu-5m').textContent = d.loadavg[1].toFixed(2);
+      document.getElementById('cpu-15m').textContent = d.loadavg[2].toFixed(2);
+      document.getElementById('cpu-count').textContent = cpus;
+      document.getElementById('cpu-bar').style.width = load1pct + '%';
+      document.getElementById('mem-pct').textContent = d.memUsedPct.toFixed(1) + '%';
+      document.getElementById('mem-used').textContent = (d.memTotalMB - d.memFreeMB).toLocaleString();
+      document.getElementById('mem-total').textContent = d.memTotalMB.toLocaleString();
+      document.getElementById('mem-bar').style.width = d.memUsedPct + '%';
+      document.getElementById('proc-count').textContent = d.procCount;
+      if (lastProcCount !== null) {
+        var delta = d.procCount - lastProcCount;
+        var el = document.getElementById('proc-delta');
+        el.textContent = delta === 0 ? 'running' : (delta > 0 ? ('+' + delta + ' since last') : (delta + ' since last'));
+      }
+      lastProcCount = d.procCount;
+      document.getElementById('uptime-pretty').textContent = fmtUptime(d.uptime);
+      document.getElementById('server-up').textContent = d.serverUptime;
+      document.getElementById('server-pid').textContent = d.serverPid;
+      var fresh = document.getElementById('stats-fresh');
+      fresh.classList.remove('text-rose-400'); fresh.classList.add('text-emerald-400');
+    } catch (e) {
+      var fresh = document.getElementById('stats-fresh');
+      fresh.classList.remove('text-emerald-400'); fresh.classList.add('text-rose-400');
+    }
+  }
+
+  async function pollProcs() {
+    try {
+      var r = await fetch('/api/processes', { cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      var rows = await r.json();
+      var tbody = document.getElementById('proc-tbody');
+      tbody.innerHTML = rows.map(function(p) {
+        var rss = p.rssKB >= 1024 ? (p.rssKB / 1024).toFixed(1) + ' MB' : p.rssKB + ' KB';
+        return '<tr class="hover:bg-white/5">' +
+          '<td class="px-5 py-2 text-slate-400">' + p.pid + '</td>' +
+          '<td class="px-5 py-2">' + (p.comm || '?').replace(/[<>&]/g, '') + '</td>' +
+          '<td class="px-5 py-2 text-right tabular-nums">' + rss + '</td>' +
+          '<td class="px-5 py-2"><span class="text-xs rounded bg-white/5 ring-1 ring-white/10 px-2 py-0.5">' + p.state + '</span></td>' +
+          '</tr>';
+      }).join('') || '<tr><td class="px-5 py-4 text-slate-500" colspan="4">(no processes)</td></tr>';
+    } catch (_) {}
+  }
+
+  pollStats(); pollProcs();
+  setInterval(pollStats, 2000);
+  setInterval(pollProcs, 5000);
+
+  // Tab switcher
+  document.querySelectorAll('.tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var which = btn.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(function(b) {
+        b.classList.remove('border-brand-400', 'text-white');
+        b.classList.add('border-transparent', 'text-slate-400');
+      });
+      btn.classList.add('border-brand-400', 'text-white');
+      btn.classList.remove('border-transparent', 'text-slate-400');
+      document.getElementById('snippet-cli').classList.toggle('hidden', which !== 'cli');
+      document.getElementById('snippet-sdk').classList.toggle('hidden', which !== 'sdk');
+    });
+  });
+
+  // Copy button
+  document.getElementById('copy-btn').addEventListener('click', function() {
+    var visible = document.querySelector('.tab-pane:not(.hidden)');
+    var text = visible ? visible.textContent : '';
+    navigator.clipboard.writeText(text).then(function() {
+      var b = document.getElementById('copy-btn');
+      var orig = b.textContent;
+      b.textContent = 'Copied!';
+      setTimeout(function() { b.textContent = orig; }, 1200);
+    });
+  });
 </script>
 </body>
 </html>`;
 }
 
+// ---------- routing ----------
+
 const routes = {
-  '/':           { handler: (res) => html(res, 200, page()) },
-  '/healthz':    { handler: (res) => json(res, 200, { status: 'ok' }) },
-  '/api/hello':  { handler: (res) => json(res, 200, hello()) },
-  '/api/info':   { handler: (res) => json(res, 200, info()) },
+  '/':              { handler: (res) => html(res, 200, page()) },
+  '/healthz':       { handler: (res) => json(res, 200, { status: 'ok' }) },
+  '/api/hello':     { handler: (res) => json(res, 200, hello()) },
+  '/api/info':      { handler: (res) => json(res, 200, info()) },
+  '/api/sysinfo':   { handler: (res) => json(res, 200, sysinfo()) },
+  '/api/stats':     { handler: (res) => json(res, 200, stats()) },
+  '/api/processes': { handler: (res) => json(res, 200, topProcesses(10)) },
 };
 
 http.createServer((req, res) => {
