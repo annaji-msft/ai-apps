@@ -1,16 +1,16 @@
-# 01-simple-anonymous-app — A simple web app in a sandbox
+# simple-anonymous — the "hello world" web app pattern
 
-The "hello world" of sandboxes: upload a small Node.js app into a fresh
-sandbox, start it in the background, and expose port 8080 to the open
-internet. The page that comes back proves the sandbox is a real VM —
-live system info, live CPU/memory/process stats, and a get-started panel
-for visitors to spin up their own.
+The simplest possible shape: upload a small Node.js app into a fresh
+sandbox, start it in the background, expose port 8080 **anonymously**
+(open to the internet), and verify the response from both inside the
+sandbox and from the host machine.
 
-Composes guides 01 (sandboxes) + 06 (ports) + 07 (files).
+The page that comes back proves the sandbox is a real Linux VM — live
+system info, live CPU/memory/process stats read from `/proc` + `os`,
+and a get-started panel for visitors to spin up their own.
 
-> Other app types — Entra-gated apps, Flask/Python apps, streaming
-> apps, terminal apps — will land as sibling scenarios (`02-…`,
-> `03-…`). This one is intentionally the simplest end-to-end shape.
+> Part of [scenarios/01-webapps](../README.md). See sibling patterns
+> there for authenticated (Entra-gated) and other web-app shapes.
 
 ## What you get
 
@@ -52,30 +52,29 @@ image with `ACA_WEBAPP_DISK=...` (default: `node-22`).
 
 - **Anonymous = open to the internet.** Don't lean on URL obscurity,
   remove ports promptly, and never serve secrets from a demo endpoint.
-  For customer-facing apps, gate the port with Entra ID (coming as a
-  sibling scenario).
+  For customer-facing apps, use the sibling `authenticated` pattern.
 - **Bake the disk.** Pre-install your dependencies into a custom disk
-  image ([guide 03](../../guides/03-disks/README.md)) so startup is
+  image ([guide 03](../../../guides/03-disks/README.md)) so startup is
   "boot", not "boot + npm install".
 - **One sandbox per tenant/user.** Tag with `labels=`
-  ([guide 11](../../guides/11-labels/README.md)) so you can find the
+  ([guide 11](../../../guides/11-labels/README.md)) so you can find the
   right one with `list_sandboxes(labels=...)`.
 - **Snapshots for warm starts.** Snapshot post-build
-  ([guide 02](../../guides/02-snapshots/README.md)) and resume into it
-  on each request — much faster than a cold boot.
+  ([guide 02](../../../guides/02-snapshots/README.md)) and resume into
+  it on each request — much faster than a cold boot.
 - **Auto-suspend / auto-delete.** Use `AutoSuspendPolicy`
-  ([guide 05](../../guides/05-lifecycle/README.md)) so idle sandboxes
+  ([guide 05](../../../guides/05-lifecycle/README.md)) so idle sandboxes
   don't burn quota.
 - **Egress lockdown.** If the app shouldn't reach the internet,
   `set_egress_default("Deny")` and allow only the hosts it needs
-  ([guide 08](../../guides/08-egress/README.md)).
+  ([guide 08](../../../guides/08-egress/README.md)).
 
 ## Layout
 
 ```
-01-simple-anonymous-app/
+simple-anonymous/
 ├── README.md              ← this file
-├── app/                   ← shared Node app (used by python and cli)
+├── app/                   ← Node app (shared by python and cli)
 │   ├── server.js
 │   └── package.json
 ├── python/

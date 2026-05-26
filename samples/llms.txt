@@ -59,22 +59,20 @@ that uses these samples.
 
 ## Sandboxes — scenarios (composed use cases)
 
-- [01-simple-anonymous-app](sandboxes/scenarios/01-simple-anonymous-app/README.md):
-  Hello-world Node.js web app in a sandbox — upload the app, start it on
-  :8080, expose the port to the open internet. Python SDK + `aca` CLI.
-- [02-entra-protected-app](sandboxes/scenarios/02-entra-protected-app/README.md):
-  Same app, but gate the port with Entra ID so only specific emails / tenants reach it.
-- [03-coding-agents](sandboxes/scenarios/03-coding-agents/README.md):
+- [01-webapps](sandboxes/scenarios/01-webapps/README.md):
+  Web apps in sandboxes. Patterns: `simple-anonymous` (port open to the
+  internet, ready) and `authenticated` (Entra-gated, planned).
+- [02-coding-agents](sandboxes/scenarios/02-coding-agents/README.md):
   Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox.
-- [04-code-interpreter](sandboxes/scenarios/04-code-interpreter/README.md):
+- [03-code-interpreter](sandboxes/scenarios/03-code-interpreter/README.md):
   LLM-driven code execution — generate, run, observe, iterate.
-- [05-swarms](sandboxes/scenarios/05-swarms/README.md):
+- [04-swarms](sandboxes/scenarios/04-swarms/README.md):
   Many sandboxes, one orchestrator — fan-out work across N workers.
-- [06-data-processing](sandboxes/scenarios/06-data-processing/README.md):
+- [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
   Producer/consumer pipelines on shared AzureBlob volumes.
-- [07-developer-workflows](sandboxes/scenarios/07-developer-workflows/README.md):
+- [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
   PR builds, ephemeral CI, on-demand dev environments.
-- [08-computer-use](sandboxes/scenarios/08-computer-use/README.md):
+- [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
   Browser/desktop automation inside a sandbox for agentic UI tasks.
 
 ## Apps
