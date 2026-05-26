@@ -11,6 +11,7 @@ Codex, Cursor, etc.) generating code that targets this repo's pillars.
 | Deploy a long-running HTTP service | `containerapps/` | `containerapps/guides/01-sandboxes` (Phase 4) |
 | Connect an app to Cosmos / Storage / Azure OpenAI | `connectors/` | `connectors/guides/01-sandboxes` (Phase 6) |
 | Kick off work from an event / HTTP / schedule | `triggers/` | `triggers/guides/01-sandboxes` (Phase 7) |
+| Put a gateway in front of LLM endpoints (routing, rate limits, keys) | `ai-gateway/` | (coming soon) |
 | Build a real AI app composing two or more of the above | `ai-apps/` | (Phase 8) |
 
 ## Setup pattern

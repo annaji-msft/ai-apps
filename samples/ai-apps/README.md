@@ -2,9 +2,9 @@
 
 > Status: coming in Phase 8.
 
-Real-world scenarios composing two or more pillars (sandboxes + apps +
-connectors + triggers). Each scenario declares its pillar dependencies at
-the top of its README.
+Real-world scenarios composing two or more pillars (sandboxes + containerapps +
+connectors + triggers + ai-gateway). Each scenario declares its pillar
+dependencies at the top of its README.
 
 Planned scenarios:
 

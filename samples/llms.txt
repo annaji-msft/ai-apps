@@ -1,9 +1,9 @@
 # ai-apps samples
 
 > Runnable samples and reference scenarios for building AI-native applications
-> on Azure Container Apps. Five pillars: sandboxes, apps, connectors, triggers,
-> and ai-apps (cross-pillar). Every sample is self-contained — `cd`
-> into a folder, install its requirements.txt, run.
+> on Azure Container Apps. Six pillars: sandboxes, containerapps, connectors,
+> triggers, ai-gateway, and ai-apps (cross-pillar). Every sample is
+> self-contained — `cd` into a folder, install its requirements.txt, run.
 
 See [AGENTS.md](AGENTS.md) for idioms and conventions when generating code
 that uses these samples.
@@ -85,6 +85,10 @@ Coming in Phase 6. See [connectors/README.md](connectors/README.md).
 ## Triggers
 
 Coming in Phase 7. See [triggers/README.md](triggers/README.md).
+
+## AI Gateway
+
+Coming soon. See [ai-gateway/README.md](ai-gateway/README.md).
 
 ## AI app workloads
 

@@ -4,14 +4,14 @@ Runnable samples for AI-native applications on Azure Container Apps.
 
 ## How this catalog is organized
 
-Five pillars, same shape inside each:
+Six pillars, same shape inside each:
 
 ```
 samples/
-  sandboxes/         containerapps/         connectors/         triggers/         ai-apps/
-    setup/             setup/        setup/              setup/            (composes other pillars)
-    guides/            guides/       guides/             guides/
-    scenarios/         scenarios/    scenarios/          scenarios/
+  sandboxes/   containerapps/   connectors/   triggers/   ai-gateway/   ai-apps/
+    setup/       setup/           setup/        setup/      setup/         (composes other pillars)
+    guides/      guides/          guides/       guides/     guides/
+    scenarios/   scenarios/       scenarios/    scenarios/  scenarios/
 ```
 
 - **`setup/`** — one Python script per pillar. Run it once. Provisions the
@@ -37,6 +37,7 @@ See the [repo root README](../README.md#quickstart).
 | [`containerapps/`](containerapps) | Long-running container apps and container apps jobs | Coming soon |
 | [`connectors/`](connectors) | Managed service connector bindings | Coming soon |
 | [`triggers/`](triggers) | HTTP / event / scheduled / KEDA triggers | Coming soon |
+| [`ai-gateway/`](ai-gateway) | Routing, rate limits, key management, and observability in front of LLM endpoints | Coming soon |
 | [`ai-apps/`](ai-apps) | Cross-pillar real-world scenarios | Coming soon |
 
 ## Conventions
