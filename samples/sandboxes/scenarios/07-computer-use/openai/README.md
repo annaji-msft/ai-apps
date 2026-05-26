@@ -131,17 +131,40 @@ vendors.
 
 ## Adapting the demo
 
-- **Drive a real website.** Change `TASK_PROMPT` in `computer_use.py` and
-  swap the Chrome `--app=http://localhost:8080/` flag in `setup.sh` to
-  the target URL. Then keep egress open or add an allow rule for the
-  target's hostname (omit the `set_egress_default("Deny")` line, or
-  follow it with `sandbox.add_egress_host_rule("*.example.com", action="Allow")`).
+- **Drive a real website.** Use the built-in CLI flags — no source edits
+  needed:
+  ```bash
+  python computer_use.py \
+    --start-url "https://news.ycombinator.com" \
+    --prompt "tell me the title of the top story, then stop" \
+    --allow-internet
+  ```
+  `--start-url` retargets Chrome at boot, `--prompt` overrides the
+  built-in expense-form task, and `--allow-internet` skips the
+  deny-by-default egress lock (required when the target is not
+  `localhost`).
 - **Change the screen size.** Update `DISPLAY_W`/`DISPLAY_H` in
   `computer_use.py` *and* the `Xvfb :99 -screen 0 1280x800x24` line in
   `setup.sh`.
 - **Persist the desktop.** After `setup.sh` finishes once, `begin_commit`
   the sandbox to a disk (see [guide 03](../../../guides/03-disks)) and
   reboot from `disk_id=` next time. Drops setup from ~3 min to ~10 sec.
+
+## Security note
+
+`add_port(..., anonymous=True)` exposes the **control server (port 7000)**
+and **noVNC (port 6080)** publicly with no authentication. Anyone who
+obtains either URL can drive the mouse/keyboard, take screenshots, or
+read `/submission`. The URLs are unguessable per run and the sandbox is
+deleted on exit, so for a short demo this is acceptable — but treat the
+URLs as sensitive, don't post them in chat, and do not adapt this sample
+to handle real credentials or PII without adding bearer-token auth in
+front of the control endpoints and a VNC password.
+
+Sandbox egress is deny-by-default once setup finishes (apt + Chrome
+download need internet during `setup.sh`, so the lockdown is applied
+*after* setup, just before the agent runs). Pass `--allow-internet` to
+opt out — required when `--start-url` points to an external site.
 
 ## Troubleshooting
 

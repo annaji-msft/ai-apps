@@ -117,6 +117,13 @@ done
 # Chrome — kiosk-launched at the demo form. --no-sandbox is required
 # inside containers without user namespaces.
 # ----------------------------------------------------------------------------
+# Start URL: defaults to the in-sandbox demo form, but can be overridden by
+# computer_use.py --start-url, which writes the URL to /opt/desktop/start_url.txt.
+START_URL="http://localhost:8080/"
+if [[ -f /opt/desktop/start_url.txt ]]; then
+    START_URL=$(head -n1 /opt/desktop/start_url.txt | tr -d '\r\n')
+fi
+
 nohup "$CHROME_BIN" \
     --no-sandbox \
     --disable-dev-shm-usage \
@@ -128,7 +135,7 @@ nohup "$CHROME_BIN" \
     --window-size=1280,800 \
     --window-position=0,0 \
     --user-data-dir=/tmp/chrome-profile \
-    --app=http://localhost:8080/ \
+    --app="$START_URL" \
   >/var/log/desktop/chrome.log 2>&1 &
 
 # ----------------------------------------------------------------------------

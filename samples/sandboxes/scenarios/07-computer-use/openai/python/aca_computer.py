@@ -36,7 +36,9 @@ class ACAAsyncComputer(AsyncComputer):
 
     @property
     def environment(self) -> Environment | None:
-        return "linux"
+        # The Responses API computer tool accepts: mac, windows, ubuntu, browser.
+        # Our sandbox boots Ubuntu, so report that.
+        return "ubuntu"
 
     @property
     def dimensions(self) -> tuple[int, int] | None:
@@ -114,16 +116,22 @@ class ACAAsyncComputer(AsyncComputer):
         await self._post("/key", {"keys": keys})
 
     async def drag(self, path: list[tuple[int, int]]) -> None:
-        await self._post("/drag", {"path": [[x, y] for x, y in path]})
+        # Control server expects [{"x": ..., "y": ...}, ...] (see DragReq).
+        await self._post("/drag", {"path": [{"x": x, "y": y} for x, y in path]})
 
     async def _post(self, path: str, body: dict) -> None:
         r = await self._client.post(f"{self._base_url}{path}", json=body)
         r.raise_for_status()
 
     async def fetch_submission(self) -> dict | None:
-        """Returns the form's last submission if any, else None."""
+        """Returns the form's last submission payload, or None if not submitted."""
         r = await self._client.get(f"{self._base_url}/submission")
         if r.status_code == 404:
             return None
         r.raise_for_status()
-        return r.json()
+        body = r.json()
+        # Control server shape: {"submitted": bool, "data": {...}} when present,
+        # or {"submitted": False} when /tmp/submission.json doesn't exist yet.
+        if not body.get("submitted"):
+            return None
+        return body.get("data")

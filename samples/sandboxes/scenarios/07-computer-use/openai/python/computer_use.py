@@ -72,22 +72,26 @@ DESKTOP_DIR = Path(__file__).resolve().parents[2] / "desktop-image"
 TASK_PROMPT = """\
 You are an operator driving a Linux desktop. A browser is already open
 to an expense-report form at http://localhost:8080/. Fill the form out
-exactly as specified below and then click the "Submit" button.
+exactly as specified below and then click the "Submit expense report"
+button.
 
 Trip details
-  Employee name: Alex Morgan
-  Department:    Engineering
-  Trip purpose:  AI Apps customer workshop
-  Trip dates:    2025-05-15 to 2025-05-17
+  Trip name:        AI Apps customer workshop
+  Start date:       2025-05-15
+  End date:         2025-05-17
+  Business purpose: On-site customer workshop for the AI Apps team
 
-Line items (add a new row for each by clicking "Add line item")
-  1. Date 2025-05-15  Category Lodging         Amount 312.40  Notes "Hotel night 1"
-  2. Date 2025-05-16  Category Lodging         Amount 312.40  Notes "Hotel night 2"
-  3. Date 2025-05-15  Category Meals           Amount  42.10  Notes "Welcome dinner"
-  4. Date 2025-05-16  Category Transportation  Amount  28.75  Notes "Taxi to venue"
+Line items (one row is pre-populated; click "Add line item" for each
+additional row). The form's Category dropdown choices are exactly:
+Airfare, Hotel, Meals, Ground transport, Other.
+  1. Category Hotel             Description "Hotel night 1"   Amount 312.40
+  2. Category Hotel             Description "Hotel night 2"   Amount 312.40
+  3. Category Meals             Description "Welcome dinner"  Amount  42.10
+  4. Category Ground transport  Description "Taxi to venue"   Amount  28.75
 
-When the form is submitted you'll see a "Thanks!" confirmation. Stop then.
-Do not navigate away. Use screenshots between actions to verify progress.
+When the form is submitted you'll see a green "Submitted." confirmation
+below the form. Stop then. Do not navigate away. Use screenshots between
+actions to verify progress.
 """
 
 
@@ -252,10 +256,12 @@ async def _amain(args: argparse.Namespace) -> int:
 
         _upload_desktop_image(sandbox)
         # If the user passed --start-url, retarget Chrome before setup boots it.
+        # Write the URL to a file setup.sh reads, so we don't have to interpolate
+        # arbitrary user input into a shell command.
         if args.start_url:
-            sandbox.exec(
-                f"sed -i 's|--app=http://localhost:8080/|--app={args.start_url}|' "
-                "/opt/desktop/setup.sh"
+            sandbox.write_file(
+                "/opt/desktop/start_url.txt",
+                args.start_url.encode("utf-8"),
             )
         _install_desktop(sandbox)
 
