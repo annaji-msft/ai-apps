@@ -16,15 +16,18 @@ This is a different shape from [`02-coding-agents`](../02-coding-agents):
 
 | Folder | Framework | Integration today | Status |
 |---|---|---|---|
-| [`openai/`](openai) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) | **First-class sandbox provider** (`agents_aca_sandboxes`) — `SandboxAgent` runs every Shell/Filesystem tool call inside an ACA microVM. Two live demos: [single-agent Deep Research](openai/01-deep-research-single) and [parallel Research Swarm](openai/02-swarm-research-parallel). | ✅ provider + 2 demos |
+| [`openai/`](openai) | [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) | **First-class sandbox provider** (`agents_aca_sandboxes`) — `SandboxAgent` runs every Shell/Filesystem tool call inside an ACA microVM. Three live demos: [single-agent Deep Research](openai/01-deep-research-single), [parallel Research Swarm](openai/02-swarm-research-parallel), and [Autonomous Swarm (Harness IN Compute)](openai/03-autonomous-swarm) — the supervisor itself runs inside a sandbox and uses its Managed Identity for both AOAI and a peer worker group (zero AOAI key in any sandbox). | ✅ provider + 3 demos |
 | [`anthropic/`](anthropic) | [Claude Managed Agents — self-hosted sandboxes](https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes) | Custom sandbox client passed to the managed-agents loop | 📝 placeholder |
 | [`langchain/`](langchain) | [LangChain Deep Agents — sandbox backends](https://docs.langchain.com/oss/python/contributing/implement-langchain#sandboxes) | `BaseSandbox` subclass | 📝 placeholder |
 
 Each subfolder ships:
 
 - For `openai/`: an installable [`sandbox-agent-extension/`](openai/sandbox-agent-extension)
-  provider package plus runnable demos in [`01-deep-research-single/`](openai/01-deep-research-single)
-  and [`02-swarm-research-parallel/`](openai/02-swarm-research-parallel).
+  provider package plus three runnable demos:
+  [`01-deep-research-single/`](openai/01-deep-research-single),
+  [`02-swarm-research-parallel/`](openai/02-swarm-research-parallel), and
+  [`03-autonomous-swarm/`](openai/03-autonomous-swarm) (harness-in-compute,
+  zero-secret).
 - For the placeholders: a small reusable adapter module + `agent.py` +
   `README.md` + `requirements.txt`, following the same shape as the
   realized OpenAI variant.

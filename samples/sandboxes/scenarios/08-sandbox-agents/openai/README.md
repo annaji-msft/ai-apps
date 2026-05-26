@@ -16,6 +16,7 @@ provider** that runs every tool call inside an isolated
 | [`sandbox-agent-extension/`](sandbox-agent-extension) | `agents_aca_sandboxes` — installable provider package (`BaseSandboxClient` + `BaseSandboxSession` against `azure-containerapps-sandbox`). Unit, live-lifecycle, and end-to-end SandboxAgent tests included. |
 | [`01-deep-research-single/`](01-deep-research-single) | **Deep Research Agent** — single `SandboxAgent` clones a GitHub repo into one sandbox and answers a question with file citations. |
 | [`02-swarm-research-parallel/`](02-swarm-research-parallel) | **Research Swarm** — host orchestrator fans research subtasks out across N parallel sandboxes, each running its own `SandboxAgent`, then aggregates the findings. |
+| [`03-autonomous-swarm/`](03-autonomous-swarm) | **Autonomous Swarm (Harness IN Compute)** — the **supervisor itself** runs inside an ACA sandbox and uses its SystemAssigned Managed Identity for both Azure OpenAI (`Cognitive Services OpenAI User`) and a peer worker sandbox group (`Container Apps SandboxGroup Data Owner`). **No AOAI key, client secret, or user credential ever enters any sandbox.** |
 
 
 ## Why "first-class provider" matters
@@ -97,7 +98,8 @@ the full provider API surface.
 
 ## Where credentials live
 
-Same posture as the legacy sample, made explicit by the provider:
+Demos 01 and 02 use AOAI API-key auth in the harness (the **harness** holds the key,
+the **sandbox** never sees it):
 
 | Location | Model key present? |
 | --- | --- |
@@ -105,6 +107,13 @@ Same posture as the legacy sample, made explicit by the provider:
 | Harness process (this Python script) | ✅ |
 | **Sandbox container** | **❌** — the harness makes model calls, not the sandbox |
 | Sandbox outbound traffic | ❌ (and pairable with [`guides/08-egress`](../../guides/08-egress) for default-deny) |
+
+Demo 03 (`03-autonomous-swarm/`) goes one step further: it uses
+**SystemAssigned Managed Identity** for AOAI auth and runs the
+supervisor itself inside a sandbox. There is **no AOAI key anywhere
+in the pipeline** — not in `samples/.env`, not in the harness, not in
+the sandbox. See its
+[README](03-autonomous-swarm/README.md) for the full zero-secret matrix.
 
 ## Related guides this composes
 
