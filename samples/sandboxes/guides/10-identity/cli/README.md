@@ -1,4 +1,4 @@
-# Managed identity (CLI)
+# Identity (CLI)
 
 ```bash
 ./run.sh

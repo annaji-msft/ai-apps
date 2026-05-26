@@ -41,8 +41,8 @@ that uses these samples.
   `set_egress_default("Deny")` + `add_egress_host_rule` to lock down outbound network. Python + CLI.
 - [09-secrets](sandboxes/guides/09-secrets/README.md):
   Group-scoped secrets — `upsert_secret` / `list_secrets` / `peek_secret` / `delete_secret`. Python + CLI.
-- [10-managed-identity](sandboxes/guides/10-managed-identity/README.md):
-  SystemAssigned identity on a sandbox group — foundation for agent inception. Python + CLI.
+- [10-identity](sandboxes/guides/10-identity/README.md):
+  Identity on a sandbox group — System-assigned / User-assigned managed identity today; foundation for agent inception. Python + CLI.
 - [11-labels](sandboxes/guides/11-labels/README.md):
   `labels=` on `begin_create_sandbox` + `list_sandboxes(labels=…)` to query by tenant/role. Python + CLI.
 - [12-interactive-shell](sandboxes/guides/12-interactive-shell/README.md):

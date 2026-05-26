@@ -66,7 +66,7 @@ documentation and how to override defaults.
 | 07 | [files](guides/07-files) | write / read / stat / list / mkdir / delete | ✅ ready |
 | 08 | [egress](guides/08-egress) | `set_egress_default("Deny")` + host allow rules | ✅ ready |
 | 09 | [secrets](guides/09-secrets) | upsert / peek / list / delete (group-scoped) | ✅ ready |
-| 10 | [managed-identity](guides/10-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
+| 10 | [identity](guides/10-identity) | Group identity (SystemAssigned / UserAssigned managed identity today; extensible) | ✅ ready |
 | 11 | [labels](guides/11-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
 | 12 | [interactive-shell](guides/12-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
 | 13 | [cli-reference](guides/13-cli-reference) | `aca` CLI reference — install, auth, help, config, doctor, YAML, selectors, output, verbose | ✅ ready |

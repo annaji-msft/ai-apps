@@ -1,4 +1,4 @@
-# Managed identity (Python)
+# Identity (Python)
 
 ```bash
 pip install -r requirements.txt

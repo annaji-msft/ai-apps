@@ -1,10 +1,12 @@
-# 10 - Managed identity
+# 10 - Identity
 
-Sandbox groups can have a System-assigned or User-assigned managed
-identity. The MI's `principalId` can then be granted any Azure RBAC
-role — most commonly **Container Apps SandboxGroup Data Owner** on a
-*different* sandbox group, enabling cross-group orchestration without
-shipping client credentials into the sandbox.
+How a sandbox group authenticates to the rest of Azure. Today that
+means a System-assigned or User-assigned **managed identity** on the
+group; new identity options will land in this guide as they ship. The
+identity's `principalId` can be granted any Azure RBAC role — most
+commonly **Container Apps SandboxGroup Data Owner** on a *different*
+sandbox group, enabling cross-group orchestration without shipping
+client credentials into the sandbox.
 
 - [`python/`](python/) — `mgmt.create_group(name, location, identity={"type": "SystemAssigned"})` + `patch_group_identity(...)`
 - [`cli/`](cli/) — `aca sandboxgroup identity assign --name X --system-assigned`
