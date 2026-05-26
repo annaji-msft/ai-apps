@@ -223,18 +223,19 @@ pg_ctlcluster "$PG_VER" main start
 for i in $(seq 1 30); do pg_isready -h 127.0.0.1 && break; sleep 1; done
 
 sudo -u postgres psql -v ON_ERROR_STOP=1 <<'EOF'
-CREATE ROLE dab LOGIN PASSWORD 'dab';
-CREATE DATABASE chinook OWNER dab;
+CREATE ROLE dab LOGIN SUPERUSER PASSWORD 'dab';
 EOF
 """
 
 CHINOOK_LOAD = f"""
 set -euo pipefail
 curl -fsSL {CHINOOK_SQL_URL} -o /tmp/chinook.sql
-# Chinook script targets the current DB; -d chinook puts it in the right place.
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d chinook -q -f /tmp/chinook.sql >/dev/null
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d chinook -c 'GRANT ALL ON ALL TABLES IN SCHEMA public TO dab;'
-sudo -u postgres psql -v ON_ERROR_STOP=1 -d chinook -tA -c 'SELECT count(*) FROM "Artist";'
+# The Chinook script does its own DROP/CREATE DATABASE chinook + \\c chinook,
+# so connect to the 'postgres' maintenance DB to let it run.
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d postgres -q -f /tmp/chinook.sql >/dev/null
+# dab is SUPERUSER so ownership of the freshly-created chinook objects is moot;
+# this is a sandbox-local DB with no other users. Just verify it's readable.
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d chinook -tA -c 'SELECT count(*) FROM artist;'
 """
 
 DOTNET_INSTALL = f"""
@@ -257,7 +258,9 @@ dab --version
 
 DEVTUNNEL_INSTALL = """
 set -euo pipefail
-curl -fsSL https://aka.ms/DevTunnelCliInstall | bash >/dev/null
+# Direct binary download (avoids apt/debconf in non-interactive sandbox).
+curl -fsSL https://aka.ms/TunnelsCliDownload/linux-x64 -o /usr/local/bin/devtunnel
+chmod +x /usr/local/bin/devtunnel
 which devtunnel
 devtunnel --version
 """
@@ -349,7 +352,7 @@ def main() -> int:
             )
             url_line = _tail_log_until(
                 sandbox, "dtlogin",
-                r"https://[^\s]+devicelogin",
+                r"https://[^\s]+/device",
                 timeout_s=5,
             )
             print()

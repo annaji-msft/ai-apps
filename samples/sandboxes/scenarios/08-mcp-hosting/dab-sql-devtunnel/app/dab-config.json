@@ -30,14 +30,14 @@
         "allow-credentials": false
       },
       "authentication": {
-        "provider": "Unauthenticated"
+        "provider": "StaticWebApps"
       }
     }
   },
   "entities": {
     "Artist": {
       "source": {
-        "object": "\"Artist\"",
+        "object": "artist",
         "type": "table"
       },
       "permissions": [
@@ -46,45 +46,34 @@
     },
     "Album": {
       "source": {
-        "object": "\"Album\"",
+        "object": "album",
         "type": "table"
       },
       "permissions": [
         { "role": "anonymous", "actions": ["read"] }
-      ],
-      "relationships": {
-        "artist": {
-          "cardinality": "one",
-          "target.entity": "Artist"
-        },
-        "tracks": {
-          "cardinality": "many",
-          "target.entity": "Track"
-        }
-      }
+      ]
     },
     "Track": {
       "source": {
-        "object": "\"Track\"",
+        "object": "track",
         "type": "table"
       },
       "permissions": [
         { "role": "anonymous", "actions": ["read"] }
-      ],
-      "relationships": {
-        "album": {
-          "cardinality": "one",
-          "target.entity": "Album"
-        },
-        "genre": {
-          "cardinality": "one",
-          "target.entity": "Genre"
-        }
-      }
+      ]
     },
     "Genre": {
       "source": {
-        "object": "\"Genre\"",
+        "object": "genre",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "MediaType": {
+      "source": {
+        "object": "media_type",
         "type": "table"
       },
       "permissions": [
@@ -93,7 +82,16 @@
     },
     "Customer": {
       "source": {
-        "object": "\"Customer\"",
+        "object": "customer",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "Employee": {
+      "source": {
+        "object": "employee",
         "type": "table"
       },
       "permissions": [
@@ -102,37 +100,39 @@
     },
     "Invoice": {
       "source": {
-        "object": "\"Invoice\"",
+        "object": "invoice",
         "type": "table"
       },
       "permissions": [
         { "role": "anonymous", "actions": ["read"] }
-      ],
-      "relationships": {
-        "customer": {
-          "cardinality": "one",
-          "target.entity": "Customer"
-        }
-      }
+      ]
     },
     "InvoiceLine": {
       "source": {
-        "object": "\"InvoiceLine\"",
+        "object": "invoice_line",
         "type": "table"
       },
       "permissions": [
         { "role": "anonymous", "actions": ["read"] }
-      ],
-      "relationships": {
-        "invoice": {
-          "cardinality": "one",
-          "target.entity": "Invoice"
-        },
-        "track": {
-          "cardinality": "one",
-          "target.entity": "Track"
-        }
-      }
+      ]
+    },
+    "Playlist": {
+      "source": {
+        "object": "playlist",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "PlaylistTrack": {
+      "source": {
+        "object": "playlist_track",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
     }
   }
 }

@@ -109,7 +109,7 @@ no browser inside the sandbox, so the script triggers the
 device-code flow:
 
 ```
-==> ACTION REQUIRED: open https://microsoft.com/devicelogin
+==> ACTION REQUIRED: open https://login.microsoft.com/device
     and enter code: ABCD-EFGH
     Waiting for login to complete...
 ```
