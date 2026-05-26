@@ -16,6 +16,12 @@
 
 set -euo pipefail
 
+# Git Bash / MSYS2 converts forward-slash args into Windows paths, which
+# breaks anything that needs literal POSIX paths inside the sandbox (e.g.
+# `--path /tmp/swarm.sh`). Disable the conversion for this script.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 # ---------------- 0. Source samples/.env ----------------
 dir="$(cd "$(dirname "$0")" && pwd)"
 while [[ "$dir" != "/" && ! -f "$dir/.env" ]]; do
@@ -35,7 +41,7 @@ ROLE_NAME="Container Apps SandboxGroup Data Owner"
 CLI_INSTALL_URL="https://raw.githubusercontent.com/microsoft/azure-container-apps/main/docs/early/aca-cli/install.sh"
 WORKERS=4
 DARTS_PER_WORKER=1000000
-SUFFIX="$(uuidgen 2>/dev/null | tr -d - | head -c6 || printf '%06x' $RANDOM$RANDOM)"
+SUFFIX="$(printf '%08x' "$(( (RANDOM<<15) ^ RANDOM ^ ($(date +%s) & 0xffff) ))")"
 ORCH_GROUP="swarm-orch-$SUFFIX"
 WORKER_GROUP="swarm-workers-$SUFFIX"
 ORIGINAL_SANDBOX_GROUP="${ACA_SANDBOX_GROUP:-}"
@@ -60,18 +66,20 @@ trap cleanup EXIT
 
 # ---------------- 1. Provision orchestrator group with MI ----------------
 echo "==> Provisioning orchestrator group $ORCH_GROUP with SystemAssigned MI..."
-# --set-config flips the current sandbox context to this group, so every
-# subsequent `aca sandboxgroup` / `aca sandbox` call targets it without
-# needing --group on each line. This is the aca config showcase.
 aca sandboxgroup create \
     --name "$ORCH_GROUP" \
-    --location "$ACA_SANDBOXGROUP_REGION" \
-    --set-config >/dev/null
+    --location "$ACA_SANDBOXGROUP_REGION" >/dev/null
+
+# Flip current sandbox context to the orchestrator group, so every
+# subsequent `aca sandboxgroup` / `aca sandbox` call targets it without
+# needing --group on each line. This is the aca config showcase.
+aca config sandbox set --group "$ORCH_GROUP" --region "$ACA_SANDBOXGROUP_REGION" >/dev/null
 
 aca sandboxgroup identity assign --name "$ORCH_GROUP" --system-assigned >/dev/null
 
 PRINCIPAL_ID="$(aca sandboxgroup identity show --name "$ORCH_GROUP" -o json \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("principalId",""))')"
+    | grep -oE '"principalId"[^"]*"[0-9a-fA-F-]+"' \
+    | grep -oE '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')"
 if [[ -z "$PRINCIPAL_ID" ]]; then
     echo "error: orchestrator group has no principalId — MI not enabled?" >&2
     exit 1
@@ -88,10 +96,28 @@ aca sandboxgroup create \
     --location "$ACA_SANDBOXGROUP_REGION" >/dev/null
 
 echo "==> Granting '$ROLE_NAME' on $WORKER_GROUP → orchestrator MI..."
-aca sandboxgroup role create \
-    --role "$ROLE_NAME" \
-    --principal-id "$PRINCIPAL_ID" \
-    --name "$WORKER_GROUP" 2>&1 | grep -vE "already|Exists" || true
+# Newly-created MI principals can take 5-30s to replicate into AAD.
+# Retry until the role assignment succeeds (or report and exit).
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if aca sandboxgroup role create \
+            --role "$ROLE_NAME" \
+            --principal-id "$PRINCIPAL_ID" \
+            --name "$WORKER_GROUP" 2>/tmp/role.err; then
+        break
+    fi
+    if grep -q "RoleAssignmentExists\|already exists" /tmp/role.err 2>/dev/null; then
+        echo "    role already assigned"
+        break
+    fi
+    if [[ "$attempt" -eq 10 ]]; then
+        cat /tmp/role.err >&2
+        echo "error: role grant failed after $attempt attempts" >&2
+        exit 1
+    fi
+    echo "    attempt $attempt: principal not yet replicated, retrying in 10s..."
+    sleep 10
+done
+rm -f /tmp/role.err
 
 echo "==> Waiting 20s for RBAC propagation..."
 sleep 20
@@ -108,7 +134,13 @@ fi
 
 # ---------------- 4. Bootstrap orchestrator (install aca + upload swarm.sh) ----------------
 echo "==> Installing aca CLI inside orchestrator..."
-aca sandbox exec --id "$ORCH_ID" -c "curl -fsSL $CLI_INSTALL_URL | sh" >/dev/null
+INSTALL_OUT="$(aca sandbox exec --id "$ORCH_ID" -c "curl -fsSL $CLI_INSTALL_URL | sh" 2>&1)"
+echo "$INSTALL_OUT" | tail -5
+if ! grep -q "successfully" <<< "$INSTALL_OUT" && ! aca sandbox exec --id "$ORCH_ID" -c "which aca && aca --version" >/dev/null 2>&1; then
+    echo "error: aca install inside orchestrator failed" >&2
+    echo "$INSTALL_OUT" >&2
+    exit 1
+fi
 
 SWARM_SH="$(mktemp)"
 cat > "$SWARM_SH" <<'INNER_EOF'
@@ -121,7 +153,8 @@ cat > "$SWARM_SH" <<'INNER_EOF'
 # `aca` call below is parameter-free because the context is already set.
 
 set -uo pipefail
-ACA="$HOME/.aca/bin/aca"
+# install.sh puts the binary in /usr/local/bin; PATH should already cover it.
+ACA="$(command -v aca || echo /usr/local/bin/aca)"
 
 echo "--- aca auth status (orchestrator, MI) ---"
 "$ACA" auth status || true
@@ -167,7 +200,15 @@ done
 INNER_EOF
 
 echo "==> Uploading swarm.sh into orchestrator..."
-aca sandbox fs write --id "$ORCH_ID" --path /tmp/swarm.sh --file "$SWARM_SH"
+# `--file` needs a host-native path; `--path` must stay POSIX for the sandbox.
+# cygpath converts the mktemp path for the host CLI; the literal /tmp/swarm.sh
+# stays as-is thanks to MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL set at the top.
+if command -v cygpath >/dev/null 2>&1; then
+    SWARM_SH_HOST="$(cygpath -w "$SWARM_SH")"
+else
+    SWARM_SH_HOST="$SWARM_SH"
+fi
+aca sandbox fs write --id "$ORCH_ID" --path /tmp/swarm.sh --file "$SWARM_SH_HOST"
 rm -f "$SWARM_SH"
 
 # ---------------- 5. Run swarm inside orchestrator ----------------

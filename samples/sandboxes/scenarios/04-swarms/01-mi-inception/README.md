@@ -91,12 +91,12 @@ math — is the lesson.
 After the [baseline setup](../../../setup) has written `samples/.env`:
 
 ```bash
-# Python SDK variant
+# Python SDK variant — end-to-end validated
 cd python
 pip install -r requirements.txt
 python swarm.py
 
-# OR: aca CLI variant
+# OR: aca CLI variant — see cli/README.md for current status
 cd cli
 ./run.sh
 ```

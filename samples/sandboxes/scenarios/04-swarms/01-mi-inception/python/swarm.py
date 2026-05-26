@@ -242,14 +242,20 @@ def main() -> None:
         print(f"    orchestrator: {orchestrator.sandbox_id}")
 
         # ---- 5. Bootstrap orchestrator ------------------------------------
-        print("==> Installing SDK + uploading spawn_workers.py into orchestrator...")
+        print("==> Downloading SDK wheel + uploading into orchestrator...")
+        import urllib.request
+        wheel_name = SDK_WHEEL_URL.rsplit("/", 1)[-1]
+        with urllib.request.urlopen(SDK_WHEEL_URL) as resp:
+            wheel_bytes = resp.read()
+        orchestrator.write_file(f"/tmp/{wheel_name}", wheel_bytes)
+        orchestrator.write_file("/tmp/spawn_workers.py", SPAWN_WORKERS_SCRIPT.encode())
+        print("==> Installing SDK inside orchestrator...")
         install = orchestrator.exec(
             f"pip install --quiet --break-system-packages "
-            f"'{SDK_WHEEL_URL}' azure-identity"
+            f"/tmp/{wheel_name} azure-identity"
         )
         if install.exit_code != 0:
             sys.exit(f"orchestrator pip install failed:\n{install.stderr}")
-        orchestrator.write_file("/tmp/spawn_workers.py", SPAWN_WORKERS_SCRIPT.encode())
 
         # ---- 6. Run the swarm ---------------------------------------------
         print(f"==> Orchestrator: spawning {WORKERS} workers in {worker_group!r} via MI...")
