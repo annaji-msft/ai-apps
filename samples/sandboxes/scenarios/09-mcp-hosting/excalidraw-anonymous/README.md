@@ -7,7 +7,7 @@ Chat, Claude Desktop, ChatGPT Connectors, or this Copilot CLI — ask
 your agent to draw a diagram and it renders inline in chat as a
 hand-drawn whiteboard.
 
-> Part of [scenarios/08-mcp-hosting](../README.md). See the sibling
+> Part of [scenarios/09-mcp-hosting](../README.md). See the sibling
 > pattern [`dab-sql-devtunnel`](../dab-sql-devtunnel/) for the
 > no-inbound-port variant that puts a database behind MCP.
 

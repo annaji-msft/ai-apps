@@ -85,6 +85,29 @@ that uses these samples.
   PR builds, ephemeral CI, on-demand dev environments.
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
   Browser/desktop automation inside a sandbox for agentic UI tasks.
+- [08-sandbox-agents](sandboxes/scenarios/08-sandbox-agents/README.md):
+  Wire agent frameworks to an ACA sandbox as their tool-execution
+  backend. Harness (model calls, planning) stays in your control
+  plane; shell + files run inside a fresh sandbox per session.
+  [`openai/`](sandboxes/scenarios/08-sandbox-agents/openai/README.md)
+  ships a **first-class sandbox provider** for the GA OpenAI Agents SDK
+  ([`openai/extension/`](sandboxes/scenarios/08-sandbox-agents/openai/extension/README.md))
+  plus three runnable demos:
+  ([`openai/sample/deep_research_agent.py`](sandboxes/scenarios/08-sandbox-agents/openai/sample/deep_research_agent.py))
+  single-agent research,
+  ([`openai/sample/research_swarm.py`](sandboxes/scenarios/08-sandbox-agents/openai/sample/research_swarm.py))
+  parallel fan-out across 6 sandboxes, and
+  ([`openai/sample/stateful_research_agent.py`](sandboxes/scenarios/08-sandbox-agents/openai/sample/stateful_research_agent.py))
+  cross-session memory via an Azure Blob volume (host-verified). All three
+  research ACA Sandboxes using the repo's own
+  [`guides/`](sandboxes/guides) as the corpus; the platform
+  architecture brief lives at
+  [`openai/PLATFORM.md`](sandboxes/scenarios/08-sandbox-agents/openai/PLATFORM.md).
+  [`anthropic/`](sandboxes/scenarios/08-sandbox-agents/anthropic/README.md)
+  (Claude Managed Agents self-hosted sandboxes) and
+  [`langchain/`](sandboxes/scenarios/08-sandbox-agents/langchain/README.md)
+  (Deep Agents `BaseSandbox`) are placeholders that will follow the
+  same provider shape once their sandbox-provider surfaces stabilize.
 
 ## Apps
 

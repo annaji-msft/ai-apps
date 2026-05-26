@@ -5,7 +5,7 @@ Run **PostgreSQL + the Chinook sample database + the Data API Builder
 expose the MCP endpoint to the public internet via **Microsoft Dev
 Tunnels** — so the sandbox itself never opens an inbound port.
 
-> Part of [scenarios/08-mcp-hosting](../README.md). See the sibling
+> Part of [scenarios/09-mcp-hosting](../README.md). See the sibling
 > pattern [`excalidraw-anonymous`](../excalidraw-anonymous/) for the
 > simpler "just `add_port`" exposure model.
 

@@ -1,4 +1,4 @@
-# 08-mcp-hosting — Host MCP servers in sandboxes
+# 09-mcp-hosting — Host MCP servers in sandboxes
 
 > **AI apps on Azure PaaS + serverless** — sandboxes pillar.
 
