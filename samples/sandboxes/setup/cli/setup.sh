@@ -7,7 +7,9 @@
 #   3. CLI config defaults         (aca config set / aca config sandbox set)
 #   4. Sandbox group               (aca sandboxgroup create --set-config)
 #   5. Data-owner role assignment  (aca sandboxgroup role create)
-#   6. samples/.env                (so Python guides can read the same config)
+#   6. samples/.env                (so Python guides can read the same config;
+#                                   also captures ACA_USER_EMAIL for the
+#                                   Entra-protected scenarios)
 #   7. aca doctor                  (verifies everything)
 #
 # Override defaults with environment variables:
@@ -91,6 +93,12 @@ echo "==> Assigning '$ROLE_NAME'..."
 # For service principals or restricted tenants, parse `oid` from the
 # management-plane access token instead - same trick the Python flow uses.
 PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
+USER_EMAIL="$(az account show --query user.name -o tsv 2>/dev/null || true)"
+# `az account show` returns the SP appId (not an email) for service principals;
+# drop anything that doesn't look like an email so we don't write garbage to .env.
+if [[ "$USER_EMAIL" != *"@"* ]]; then
+    USER_EMAIL=""
+fi
 if [[ -z "$PRINCIPAL_ID" ]]; then
     TOKEN="$(az account get-access-token --resource https://management.azure.com/ --query accessToken -o tsv)"
     PAYLOAD="$(printf '%s' "$TOKEN" | cut -d. -f2)"
@@ -108,6 +116,10 @@ else
         --role "$ROLE_NAME" \
         --principal-id "$PRINCIPAL_ID" 2>&1 | grep -vE "already|Exists" || true
     echo "    assigned to $PRINCIPAL_ID"
+fi
+if [[ -z "$USER_EMAIL" ]]; then
+    echo "    warning: could not detect a user email (likely a service principal)." >&2
+    echo "    Set ACA_USER_EMAIL in samples/.env manually if you want to run the Entra-protected scenarios." >&2
 fi
 
 # ----- 6. samples/.env --------------------------------------------------
@@ -132,6 +144,7 @@ EXISTING[ACA_RESOURCE_GROUP]="$ACA_RESOURCE_GROUP"
 EXISTING[ACA_SANDBOX_GROUP]="$ACA_SANDBOX_GROUP"
 EXISTING[ACA_SANDBOXGROUP_REGION]="$ACA_SANDBOXGROUP_REGION"
 EXISTING[ACA_REGION]="$ACA_REGION"
+EXISTING[ACA_USER_EMAIL]="$USER_EMAIL"
 
 {
     echo "# Written by samples/sandboxes/setup/cli/setup.sh"

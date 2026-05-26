@@ -15,10 +15,16 @@ Pick the flow that matches the surface you want to use:
 | **Python SDK** | [`python/`](./python/) | You'll mostly run the Python guides. Needs Python 3.10+ + pip. |
 | **`aca` CLI**  | [`cli/`](./cli/)       | You'll mostly run the CLI guides. **No Python required** — bash on Linux, macOS, or Windows (Git Bash / WSL / MSYS2). |
 
-Both flows write the same six keys to `samples/.env`
+Both flows write the same keys to `samples/.env`
 (`AZURE_SUBSCRIPTION_ID`, `ACA_SUBSCRIPTION`, `ACA_RESOURCE_GROUP`,
-`ACA_SANDBOX_GROUP`, `ACA_SANDBOXGROUP_REGION`, `ACA_REGION`), so you
-can run either one, both, or switch between them without losing state.
+`ACA_SANDBOX_GROUP`, `ACA_SANDBOXGROUP_REGION`, `ACA_REGION`, plus
+`ACA_USER_EMAIL` — the signed-in user, used by scenarios that expose
+Entra-protected sandbox ports), so you can run either one, both, or
+switch between them without losing state.
+
+Service-principal callers don't have an email — `ACA_USER_EMAIL` is
+left empty and a warning is printed. Set it manually in `samples/.env`
+if you want to run the Entra-protected scenarios as that principal.
 
 ## Quickstart - Python
 

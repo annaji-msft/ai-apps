@@ -76,7 +76,7 @@ documentation and how to override defaults.
 
 | # | Scenario | What it will show | Status |
 |---|---|---|---|
-| 01 | [webapps](scenarios/01-webapps) | Run web apps inside sandboxes (server + public port + client) | 📝 planned |
+| 01 | [webapps](scenarios/01-webapps) | Run a Node.js web app in a sandbox; expose port 8080 anonymously or gated by Entra ID — two variants | ✅ ready |
 | 02 | [coding-agents](scenarios/02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
 | 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
 | 04 | [swarms](scenarios/04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
