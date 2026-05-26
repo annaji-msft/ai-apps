@@ -367,7 +367,7 @@ async def main_async() -> int:
     # Pin AsyncAzureOpenAI's underlying httpx client to the sandbox's system
     # CA bundle so the ADC egress-proxy cert verifies.
     verify_arg = SYSTEM_CA_BUNDLE if os.path.exists(SYSTEM_CA_BUNDLE) else True
-    openai_http_client = httpx.AsyncClient(verify=verify_arg, timeout=60.0)
+    openai_http_client = httpx.AsyncClient(verify=verify_arg, timeout=180.0)
 
     cred = ManagedIdentityCredential()
     aoai_token_provider = get_bearer_token_provider(
@@ -447,7 +447,10 @@ async def main_async() -> int:
             "final_answer": final,
         }
         print("RESULT=" + json.dumps(payload))
-        return 0 if all(w.get("ok") for w in worker_results) else 1
+        # Partial worker failures are surfaced in payload["workers"] but the
+        # supervisor's job (decompose -> dispatch -> synthesize) succeeded.
+        # Exit 0 so the host parses and prints the final answer.
+        return 0
 
     finally:
         try:
