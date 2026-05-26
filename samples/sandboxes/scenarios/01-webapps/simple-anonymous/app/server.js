@@ -226,7 +226,7 @@ function page() {
     </a>
     <a href="#get-started"
        class="inline-flex items-center gap-2 rounded-lg bg-white/5 ring-1 ring-white/10 px-5 py-2.5 font-medium hover:bg-white/10 transition">
-      Get started in 30 seconds
+      Quick start
     </a>
   </div>
 </section>
@@ -331,24 +331,6 @@ function page() {
   </div>
 </section>
 
-<!-- Protected access placeholder -->
-<section class="mx-auto max-w-6xl px-6 pb-8">
-  <div class="card rounded-2xl ring-1 ring-amber-500/30 bg-amber-500/5 p-6 flex flex-col md:flex-row md:items-center gap-5">
-    <div class="size-12 shrink-0 rounded-xl bg-amber-500/20 ring-1 ring-amber-500/30 grid place-items-center text-amber-300 text-xl">🔒</div>
-    <div class="flex-1">
-      <h3 class="font-semibold text-amber-100">Protected access (Entra ID)</h3>
-      <p class="text-sm text-amber-100/80 mt-1">
-        Sandboxes can gate any port behind Entra so only specific emails / tenants reach the app.
-        A protected twin of this demo is running — the login experience is being polished;
-        try the anonymous demo above for now.
-      </p>
-    </div>
-    <a href="#" class="text-sm rounded-md bg-white/5 ring-1 ring-white/10 px-3 py-1.5 hover:bg-white/10 transition opacity-60 cursor-not-allowed" title="Coming soon">
-      Sign in (soon) ↗
-    </a>
-  </div>
-</section>
-
 <!-- What is a sandbox -->
 <section class="mx-auto max-w-6xl px-6 pb-8">
   <div class="card rounded-2xl ring-1 ring-white/10 p-6">
@@ -362,44 +344,159 @@ function page() {
   </div>
 </section>
 
+<!-- Prerequisites -->
+<section class="mx-auto max-w-6xl px-6 pb-8">
+  <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Prerequisites</h2>
+  <div class="card rounded-2xl ring-1 ring-white/10 p-6">
+    <ul class="space-y-2.5 text-sm text-slate-300">
+      <li class="flex gap-3">
+        <span class="text-brand-400 mt-0.5">▸</span>
+        <span><a href="https://learn.microsoft.com/cli/azure/install-azure-cli" target="_blank" rel="noopener" class="text-brand-400 hover:underline">Azure CLI</a>
+        installed and logged in &mdash; <code class="font-mono text-xs bg-white/5 ring-1 ring-white/10 rounded px-1.5 py-0.5">az login</code></span>
+      </li>
+      <li class="flex gap-3">
+        <span class="text-brand-400 mt-0.5">▸</span>
+        <span>An Azure subscription with a resource group</span>
+      </li>
+      <li class="flex gap-3">
+        <span class="text-brand-400 mt-0.5">▸</span>
+        <span>For the Python SDK: <strong>Python &ge; 3.10</strong></span>
+      </li>
+      <li class="flex gap-3">
+        <span class="text-brand-400 mt-0.5">▸</span>
+        <span>On hosted compute (Azure VMs, Container Apps, CI/CD), <code class="font-mono text-xs bg-white/5 ring-1 ring-white/10 rounded px-1.5 py-0.5">DefaultAzureCredential</code> automatically uses managed identity &mdash; no Azure CLI needed.</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
 <!-- Get started -->
 <section id="get-started" class="mx-auto max-w-6xl px-6 pb-16">
-  <h2 class="text-2xl font-bold tracking-tight">Get started in 30 seconds</h2>
-  <p class="text-slate-400 mt-1">Create a sandbox, exec into it, expose a port. Pick your flavor.</p>
+  <h2 class="text-2xl font-bold tracking-tight">Quick start</h2>
+  <p class="text-slate-400 mt-1">Zero to sandbox in five minutes. Install, log in, create a sandbox group, grant yourself data&#8209;plane access, then run a command. Pick your flavor.</p>
 
   <div class="mt-5 card rounded-2xl ring-1 ring-white/10 overflow-hidden">
     <div class="flex border-b border-white/10 text-sm">
-      <button data-tab="cli" class="tab px-5 py-3 font-medium border-b-2 border-brand-400 text-white">CLI</button>
+      <button data-tab="cli" class="tab px-5 py-3 font-medium border-b-2 border-brand-400 text-white">aca CLI</button>
       <button data-tab="sdk" class="tab px-5 py-3 font-medium border-b-2 border-transparent text-slate-400 hover:text-white">Python SDK</button>
       <div class="ml-auto px-4 py-2 flex items-center">
         <button id="copy-btn" class="text-xs rounded-md bg-white/5 ring-1 ring-white/10 px-3 py-1.5 hover:bg-white/10 transition">Copy</button>
       </div>
     </div>
-    <pre id="snippet-cli" class="tab-pane block p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># install once: pip install azure-sandboxes-cli</span>
-<span class="text-fuchsia-300">aca</span> sandbox create --name my-box --disk node-22
-<span class="text-fuchsia-300">aca</span> sandbox exec   --id my-box -c <span class="text-emerald-300">"uname -a &amp;&amp; echo hi from $(hostname)"</span>
-<span class="text-fuchsia-300">aca</span> sandbox fs write --id my-box --path /app/server.js --file ./server.js
-<span class="text-fuchsia-300">aca</span> sandbox exec   --id my-box -c <span class="text-emerald-300">"cd /app &amp;&amp; nohup node server.js &amp;"</span>
-<span class="text-fuchsia-300">aca</span> sandbox port add --id my-box --port 8080 --anonymous</pre>
-    <pre id="snippet-sdk" class="tab-pane hidden p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># install once: pip install azure-sandboxes</span>
-<span class="text-brand-400">from</span> azure.sandboxes <span class="text-brand-400">import</span> SandboxClient
 
-client = SandboxClient.from_env()
-box    = client.create(name=<span class="text-emerald-300">"my-box"</span>, disk=<span class="text-emerald-300">"node-22"</span>)
+    <pre id="snippet-cli" class="tab-pane block p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># Install (Linux / macOS)</span>
+curl -fsSL https://raw.githubusercontent.com/microsoft/azure-container-apps/main/docs/early/aca-cli/install.sh | sh
 
-<span class="text-brand-400">print</span>(box.exec(<span class="text-emerald-300">"uname -a &amp;&amp; echo hi"</span>).stdout)
+<span class="text-slate-500"># Install (Windows PowerShell)</span>
+<span class="text-slate-500"># irm https://raw.githubusercontent.com/microsoft/azure-container-apps/main/docs/early/aca-cli/install.ps1 | iex</span>
 
-box.fs.write(<span class="text-emerald-300">"/app/server.js"</span>, open(<span class="text-emerald-300">"server.js"</span>).read())
-box.exec(<span class="text-emerald-300">"cd /app &amp;&amp; nohup node server.js &amp;"</span>)
+<span class="text-slate-500"># 0. Login to Azure</span>
+az login
 
-url = box.ports.add(<span class="text-amber-300">8080</span>, anonymous=<span class="text-brand-400">True</span>)
-<span class="text-brand-400">print</span>(<span class="text-emerald-300">"live at"</span>, url)</pre>
+<span class="text-slate-500"># 1. Create a resource group (skip if you have one)</span>
+az group create --name my-rg --location eastus2
+
+<span class="text-slate-500"># 2. Create a sandbox group (saves config automatically)</span>
+<span class="text-fuchsia-300">aca</span> sandboxgroup create --name my-sandbox-group --location eastus2 --set-config
+
+<span class="text-slate-500"># 3. Grant yourself data-plane access</span>
+<span class="text-fuchsia-300">aca</span> sandboxgroup role create \
+  --role <span class="text-emerald-300">"Container Apps SandboxGroup Data Owner"</span> \
+  --principal-id $(az ad signed-in-user show --query id -o tsv)
+
+<span class="text-slate-500"># 4. Verify setup</span>
+<span class="text-fuchsia-300">aca</span> doctor
+
+<span class="text-slate-500"># 5. Create a sandbox</span>
+<span class="text-fuchsia-300">aca</span> sandbox create --disk ubuntu
+
+<span class="text-slate-500"># 6. Run a command</span>
+<span class="text-fuchsia-300">aca</span> sandbox exec --id &lt;sandbox-id&gt; -c <span class="text-emerald-300">"echo hello world &amp;&amp; uname -a"</span>
+
+<span class="text-slate-500"># 7. Clean up</span>
+<span class="text-fuchsia-300">aca</span> sandbox delete --id &lt;sandbox-id&gt; --yes</pre>
+
+    <pre id="snippet-sdk" class="tab-pane hidden p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># Install</span>
+pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
+pip install azure-mgmt-resource azure-mgmt-authorization
+
+<span class="text-slate-500"># Then in Python:</span>
+<span class="text-brand-400">import</span> uuid
+<span class="text-brand-400">from</span> azure.identity <span class="text-brand-400">import</span> DefaultAzureCredential
+<span class="text-brand-400">from</span> azure.mgmt.resource <span class="text-brand-400">import</span> ResourceManagementClient
+<span class="text-brand-400">from</span> azure.mgmt.authorization <span class="text-brand-400">import</span> AuthorizationManagementClient
+<span class="text-brand-400">from</span> azure.containerapps.sandbox <span class="text-brand-400">import</span> (
+    SandboxGroupManagementClient,
+    SandboxGroupClient,
+    endpoint_for_region,
+)
+
+credential       = DefaultAzureCredential()
+subscription_id  = <span class="text-emerald-300">"&lt;your-subscription-id&gt;"</span>   <span class="text-slate-500"># az account show --query id -o tsv</span>
+principal_id     = <span class="text-emerald-300">"&lt;your-principal-id&gt;"</span>      <span class="text-slate-500"># az ad signed-in-user show --query id -o tsv</span>
+resource_group   = <span class="text-emerald-300">"my-rg"</span>
+sandbox_group    = <span class="text-emerald-300">"my-sandbox-group"</span>
+region           = <span class="text-emerald-300">"eastus2"</span>
+
+<span class="text-slate-500"># 1. Create resource group</span>
+ResourceManagementClient(credential, subscription_id) \
+    .resource_groups.create_or_update(resource_group, {<span class="text-emerald-300">"location"</span>: region})
+
+<span class="text-slate-500"># 2. Create sandbox group</span>
+mgmt = SandboxGroupManagementClient(credential,
+    subscription_id=subscription_id, resource_group=resource_group)
+mgmt.create_group(sandbox_group, location=region)
+
+<span class="text-slate-500"># 3. Grant data-plane access</span>
+auth = AuthorizationManagementClient(credential, subscription_id)
+scope = <span class="text-emerald-300">f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"</span>
+role  = <span class="text-brand-400">next</span>(auth.role_definitions.list(scope,
+    filter=<span class="text-emerald-300">"roleName eq 'Container Apps SandboxGroup Data Owner'"</span>))
+auth.role_assignments.create(scope, uuid.uuid4(), {
+    <span class="text-emerald-300">"role_definition_id"</span>: role.id,
+    <span class="text-emerald-300">"principal_id"</span>: principal_id,
+    <span class="text-emerald-300">"principal_type"</span>: <span class="text-emerald-300">"User"</span>,
+})
+
+<span class="text-slate-500"># 4. Connect to data plane and create a sandbox</span>
+client = SandboxGroupClient(endpoint_for_region(region), credential,
+    subscription_id=subscription_id,
+    resource_group=resource_group,
+    sandbox_group=sandbox_group)
+
+sandbox = client.begin_create_sandbox(disk=<span class="text-emerald-300">"ubuntu"</span>).result()
+
+<span class="text-slate-500"># 5. Run a command</span>
+<span class="text-brand-400">print</span>(sandbox.exec(<span class="text-emerald-300">"echo hello world &amp;&amp; uname -a"</span>).stdout)
+
+<span class="text-slate-500"># 6. Clean up</span>
+sandbox.delete()
+mgmt.delete_group(sandbox_group)</pre>
+  </div>
+
+  <div class="mt-4 grid sm:grid-cols-2 gap-3 text-sm">
+    <a href="https://github.com/microsoft/azure-container-apps/blob/main/docs/early/aca-cli/README.md"
+       target="_blank" rel="noopener"
+       class="rounded-lg bg-white/5 ring-1 ring-white/10 p-4 hover:bg-white/10 transition flex items-center justify-between">
+      <div>
+        <div class="font-medium text-slate-100">aca CLI README ↗</div>
+        <div class="text-slate-400 text-xs mt-0.5">Install, ports, files, snapshots, egress, managed identity</div>
+      </div>
+      <span class="text-brand-400">→</span>
+    </a>
+    <a href="https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md"
+       target="_blank" rel="noopener"
+       class="rounded-lg bg-white/5 ring-1 ring-white/10 p-4 hover:bg-white/10 transition flex items-center justify-between">
+      <div>
+        <div class="font-medium text-slate-100">Python SDK README ↗</div>
+        <div class="text-slate-400 text-xs mt-0.5">Clients, exec, files, ports, egress, snapshots, lifecycle</div>
+      </div>
+      <span class="text-brand-400">→</span>
+    </a>
   </div>
 
   <div class="mt-4 text-sm text-slate-400">
-    Or open <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
-       class="text-brand-400 hover:underline">sandboxes.azure.com</a>
-    and click <em>New sandbox</em> — no CLI required.
+    Prefer a UI? Open <a href="https://sandboxes.azure.com" target="_blank" rel="noopener" class="text-brand-400 hover:underline">sandboxes.azure.com</a> and click <em>New sandbox</em>.
   </div>
 </section>
 
