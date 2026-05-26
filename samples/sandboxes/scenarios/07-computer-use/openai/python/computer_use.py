@@ -1,86 +1,95 @@
-"""Computer-use agent in an ACA sandbox, driven by Azure OpenAI.
+"""End-to-end OpenAI computer-use demo, driving an ACA sandbox.
 
-End-to-end demo:
+Uses the OpenAI Agents SDK (``openai-agents``) with the ``ComputerTool``
+backed by our ``ACAAsyncComputer`` adapter, talking to Azure OpenAI for
+the model (``computer-use-preview`` deployment).
 
-  1. Boot a fresh ``ubuntu`` sandbox under deny-by-default egress (the agent
-     never reaches the internet — it only talks to the sandbox-local form).
-  2. Upload ``desktop-image/`` (setup.sh + control_server.py + form/) into the
-     sandbox and run ``setup.sh`` to bring up Xvfb + Chromium + noVNC +
-     the FastAPI control server.
-  3. Expose port 7000 (control) and 6080 (noVNC) via ``add_port``. Print the
-     noVNC URL so the operator can watch the agent work in their browser.
-  4. Run the OpenAI Responses API ``computer_use_preview`` loop against an
-     Azure OpenAI deployment of the ``computer-use-preview`` model.
-  5. Verify the form submission landed in ``/tmp/submission.json`` inside
-     the sandbox and print the totals.
-  6. Delete the sandbox.
+Flow:
+  1. Boot a fresh `ubuntu` sandbox.
+  2. Upload desktop-image/ and run setup.sh -- brings up Xvfb, Chrome,
+     noVNC, and the FastAPI control server.
+  3. Expose port 7000 (control) and 6080 (noVNC) publicly.
+  4. Lock egress down: nothing in the sandbox can talk to the internet.
+     The agent does all its work against `localhost:8080` inside the box.
+  5. Build an Agent[ComputerTool[ACAAsyncComputer]] pointed at Azure OpenAI
+     and let it complete an expense-report form.
+  6. Verify the form's submission JSON.
+  7. Delete the sandbox.
 
-Configuration (samples/.env):
-  AZURE_SUBSCRIPTION_ID, ACA_RESOURCE_GROUP, ACA_SANDBOX_GROUP,
-  ACA_SANDBOXGROUP_REGION  -- the sandbox group (from setup.py)
-  AZURE_OPENAI_ENDPOINT    -- e.g. https://my-aoai.openai.azure.com/
-  AZURE_OPENAI_API_KEY     -- key for that endpoint
-  AZURE_OPENAI_COMPUTER_USE_DEPLOYMENT  -- deployment name, e.g. "computer-use-preview"
-  AZURE_OPENAI_API_VERSION (optional)   -- defaults to a current preview
+Required env (in samples/.env):
+  ACA_SANDBOXGROUP_REGION, AZURE_SUBSCRIPTION_ID, ACA_RESOURCE_GROUP,
+  ACA_SANDBOX_GROUP, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
+  AZURE_OPENAI_COMPUTER_USE_DEPLOYMENT (deployment name for
+  computer-use-preview on your AOAI resource).
+
+Optional:
+  AZURE_OPENAI_API_VERSION (default: 2025-04-01-preview)
+
+Flags:
+  --manual    Skip the agent loop. Boot the desktop, print the noVNC URL,
+              and wait for Enter. Use this to demo the platform without
+              an LLM, or to drive the form yourself.
 """
 
 from __future__ import annotations
 
-import base64
-import json
+import argparse
+import asyncio
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
+
+# Tracing in openai-agents defaults to the OpenAI cloud trace exporter,
+# which requires an OPENAI_API_KEY. We're on Azure, so disable it before
+# any agents import to avoid the noisy "skipping trace export" warnings.
+os.environ.setdefault("OPENAI_AGENTS_DISABLE_TRACING", "1")
 
 from azure.identity import DefaultAzureCredential
 from azure.containerapps.sandbox import (
     SandboxGroupClient,
     endpoint_for_region,
 )
-from openai import AzureOpenAI
+from openai import AsyncAzureOpenAI
+from agents import Agent, ComputerTool, ModelSettings, Runner
+from agents import set_tracing_disabled
+from agents.exceptions import MaxTurnsExceeded
+from agents.models.openai_responses import OpenAIResponsesModel
 
-from aca_computer import ACAComputer
+set_tracing_disabled(True)
 
-# --------------------------------------------------------------------------
-# Tunables
-# --------------------------------------------------------------------------
+from aca_computer import ACAAsyncComputer
 
 DEFAULT_API_VERSION = "2025-04-01-preview"
-DISPLAY_W, DISPLAY_H = 1280, 800
-MAX_AGENT_TURNS = 30
+DISPLAY_W = 1280
+DISPLAY_H = 800
 CONTROL_PORT = 7000
 NOVNC_PORT = 6080
+MAX_AGENT_TURNS = 80
 
 DESKTOP_DIR = Path(__file__).resolve().parents[2] / "desktop-image"
 
 TASK_PROMPT = """\
-You are filling out an expense report for a business trip on the web form
-already open in front of you (a Chromium window at http://localhost:8080).
+You are an operator driving a Linux desktop. A browser is already open
+to an expense-report form at http://localhost:8080/. Fill the form out
+exactly as specified below and then click the "Submit" button.
 
-Use the following data:
+Trip details
+  Employee name: Alex Morgan
+  Department:    Engineering
+  Trip purpose:  AI Apps customer workshop
+  Trip dates:    2025-05-15 to 2025-05-17
 
-  Trip name:        Q4 customer visit - Seattle
-  Start date:       2025-11-10
-  End date:         2025-11-12
-  Business purpose: Onsite design review with the Acme platform team
-  Line items:
-    - Airfare,          "SEA <-> JFK round-trip",  642.18
-    - Hotel,            "Westin Seattle 2 nights", 489.00
-    - Meals,            "Team dinner Tuesday",     127.55
-    - Ground transport, "Airport taxi both ways",   84.40
+Line items (add a new row for each by clicking "Add line item")
+  1. Date 2025-05-15  Category Lodging         Amount 312.40  Notes "Hotel night 1"
+  2. Date 2025-05-16  Category Lodging         Amount 312.40  Notes "Hotel night 2"
+  3. Date 2025-05-15  Category Meals           Amount  42.10  Notes "Welcome dinner"
+  4. Date 2025-05-16  Category Transportation  Amount  28.75  Notes "Taxi to venue"
 
-Fill every field, add line items as needed (the form starts with one empty
-row -- use the "Add line item" button for the others), then click
-"Submit expense report". When you see the green "Submitted." confirmation,
-the task is complete.
+When the form is submitted you'll see a "Thanks!" confirmation. Stop then.
+Do not navigate away. Use screenshots between actions to verify progress.
 """
 
-
-# --------------------------------------------------------------------------
-# Env loading (matches AGENTS.md idiom)
-# --------------------------------------------------------------------------
 
 def _load_env() -> None:
     for parent in Path(__file__).resolve().parents:
@@ -91,27 +100,16 @@ def _load_env() -> None:
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k.strip(), v.strip())
             break
-    missing = [k for k in (
-        "ACA_SANDBOXGROUP_REGION", "AZURE_SUBSCRIPTION_ID",
-        "ACA_RESOURCE_GROUP", "ACA_SANDBOX_GROUP",
-        "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_COMPUTER_USE_DEPLOYMENT",
-    ) if not os.environ.get(k)]
-    if missing:
-        sys.exit(
-            "error: missing env vars: " + ", ".join(missing) + "\n"
-            "       Set them in samples/.env. Sandbox group keys come from\n"
-            "       samples/sandboxes/setup/python/setup.py; Azure OpenAI keys\n"
-            "       you set manually."
-        )
 
 
-# --------------------------------------------------------------------------
-# Sandbox bootstrap
-# --------------------------------------------------------------------------
+def _require(name: str) -> str:
+    v = os.environ.get(name)
+    if not v:
+        sys.exit(f"error: missing env var {name}\n       set it in samples/.env")
+    return v
+
 
 def _upload_desktop_image(sandbox) -> None:
-    """Write every file in desktop-image/ to /opt/desktop in the sandbox."""
     print(f"==> Uploading desktop image from {DESKTOP_DIR}...")
     sandbox.exec("mkdir -p /opt/desktop/form")
     for src in DESKTOP_DIR.rglob("*"):
@@ -120,18 +118,25 @@ def _upload_desktop_image(sandbox) -> None:
         rel = src.relative_to(DESKTOP_DIR).as_posix()
         dest = f"/opt/desktop/{rel}"
         data = src.read_bytes()
-        # write_file is the documented API for pushing files in
+        # Strip CRLF -> LF (we run on Windows; targets are Linux).
+        data = data.replace(b"\r\n", b"\n")
         sandbox.write_file(dest, data)
     sandbox.exec("chmod +x /opt/desktop/setup.sh")
 
 
 def _install_desktop(sandbox) -> None:
-    print("==> Installing desktop (this takes 2-4 minutes the first time)...")
+    print("==> Running setup.sh (~2-4 min: apt installs Chrome + noVNC + ...)...")
     r = sandbox.exec("bash /opt/desktop/setup.sh", timeout=600)
-    sys.stdout.write(r.stdout or "")
+    if r.stdout:
+        sys.stdout.write(r.stdout)
+        if not r.stdout.endswith("\n"):
+            sys.stdout.write("\n")
+    if r.stderr:
+        sys.stderr.write(r.stderr)
+        if not r.stderr.endswith("\n"):
+            sys.stderr.write("\n")
     if r.exit_code != 0:
-        sys.stderr.write(r.stderr or "")
-        raise RuntimeError(f"setup.sh failed with exit {r.exit_code}")
+        raise RuntimeError(f"setup.sh failed: exit={r.exit_code}")
 
 
 def _expose(sandbox, port: int, label: str) -> str:
@@ -143,201 +148,155 @@ def _expose(sandbox, port: int, label: str) -> str:
     return url
 
 
-# --------------------------------------------------------------------------
-# Agent loop
-# --------------------------------------------------------------------------
-
-def _tool_def() -> dict:
-    return {
-        "type": "computer_use_preview",
-        "display_width": DISPLAY_W,
-        "display_height": DISPLAY_H,
-        "environment": "linux",
-    }
-
-
-def _extract_calls(response) -> list:
-    return [item for item in (response.output or [])
-            if getattr(item, "type", None) == "computer_call"]
-
-
-def _extract_text(response) -> str:
-    parts: list[str] = []
-    for item in (response.output or []):
-        if getattr(item, "type", None) == "message":
-            for c in getattr(item, "content", None) or []:
-                text = getattr(c, "text", None)
-                if text:
-                    parts.append(text)
-    return "\n".join(parts).strip()
-
-
-def _ack_safety_checks(call) -> list:
-    """Acknowledge any pending_safety_checks the model asked us to confirm.
-
-    For this demo the workload is fully isolated (deny-default egress, fresh
-    ephemeral desktop, no creds), so we acknowledge them automatically.
-    In production you'd surface them to a human.
-    """
-    raw = getattr(call, "pending_safety_checks", None) or []
-    acks = []
-    for sc in raw:
-        if isinstance(sc, dict):
-            acks.append(sc)
-        else:
-            acks.append({
-                "id": getattr(sc, "id", None),
-                "code": getattr(sc, "code", None),
-                "message": getattr(sc, "message", None),
-            })
-    return acks
-
-
-def run_agent(client: AzureOpenAI, deployment: str, computer: ACAComputer) -> str:
-    """Drive the Responses API loop. Returns the agent's final text reply."""
-    tool = _tool_def()
-    print("==> Sending initial prompt to model...")
-    response = client.responses.create(
-        model=deployment,
-        tools=[tool],
-        input=[{"role": "user", "content": TASK_PROMPT}],
-        reasoning={"summary": "concise"},
-        truncation="auto",
+def _build_agent(computer: ACAAsyncComputer, deployment: str) -> Agent:
+    aoai = AsyncAzureOpenAI(
+        api_key=_require("AZURE_OPENAI_API_KEY"),
+        azure_endpoint=_require("AZURE_OPENAI_ENDPOINT"),
+        api_version=os.environ.get("AZURE_OPENAI_API_VERSION", DEFAULT_API_VERSION),
+    )
+    # For Azure, the OpenAIResponsesModel `model` string is the deployment
+    # name, not the OpenAI model id.
+    model = OpenAIResponsesModel(model=deployment, openai_client=aoai)
+    return Agent(
+        name="ACA computer operator",
+        instructions=(
+            "You operate a Linux desktop via the computer tool. Take a "
+            "screenshot first to ground yourself. Click precisely, verify "
+            "with screenshots between actions, and stop as soon as the "
+            "task is complete."
+        ),
+        tools=[ComputerTool(computer=computer)],
+        model=model,
+        model_settings=ModelSettings(truncation="auto"),
     )
 
-    for turn in range(1, MAX_AGENT_TURNS + 1):
-        calls = _extract_calls(response)
-        if not calls:
-            return _extract_text(response) or "(no final message)"
-        call = calls[0]
-        action = getattr(call, "action", None)
-        action_type = getattr(action, "type", None) if action else None
-        print(f"    turn {turn:>2}: action={action_type}")
 
-        # Execute the action against the sandbox desktop.
+async def _run_agent(control_url: str, deployment: str, prompt: str) -> int:
+    async with ACAAsyncComputer(
+        control_url, width=DISPLAY_W, height=DISPLAY_H
+    ) as computer:
+        agent = _build_agent(computer, deployment)
+        print(f"==> Running agent (cap: {MAX_AGENT_TURNS} turns)...")
         try:
-            computer.execute(action)
-        except Exception as e:  # noqa: BLE001
-            print(f"    [error] executing {action_type}: {e}")
+            result = await Runner.run(
+                agent,
+                input=prompt,
+                max_turns=MAX_AGENT_TURNS,
+            )
+            print()
+            print("agent final output:")
+            print(result.final_output)
+        except MaxTurnsExceeded:
+            print()
+            print(
+                f"agent hit the {MAX_AGENT_TURNS}-turn cap without finishing. "
+                "Raise MAX_AGENT_TURNS in computer_use.py or shorten the task."
+            )
 
-        # Always send a fresh screenshot back as the call output.
-        time.sleep(0.4)  # let the screen settle
-        screenshot_b64 = computer.screenshot()
-
-        response = client.responses.create(
-            model=deployment,
-            tools=[tool],
-            previous_response_id=response.id,
-            input=[{
-                "call_id": call.call_id,
-                "type": "computer_call_output",
-                "acknowledged_safety_checks": _ack_safety_checks(call),
-                "output": {
-                    "type": "input_image",
-                    "image_url": f"data:image/png;base64,{screenshot_b64}",
-                },
-            }],
-            truncation="auto",
-        )
-
-    return "[stopped] hit MAX_AGENT_TURNS without the model emitting a final message"
+        print()
+        submission = await computer.fetch_submission()
+        if submission:
+            print("form submission captured:")
+            for k, v in submission.items():
+                print(f"  {k}: {v}")
+        else:
+            print("(no /tmp/submission.json yet)")
+        return 0
 
 
-# --------------------------------------------------------------------------
-# Verification
-# --------------------------------------------------------------------------
-
-def _verify(sandbox) -> None:
-    print("==> Verifying /tmp/submission.json...")
+def _manual_wait(control_url: str, novnc_url: str) -> None:
+    print()
+    print("=" * 76)
+    print("  --manual: no AI loop. Open this URL in your browser:")
+    print()
+    print(f"    {novnc_url}/vnc.html?autoconnect=1&resize=remote")
+    print()
+    print("  Or drive the control server from another terminal:")
+    print(f"    curl -X POST {control_url}/click \\")
+    print('      -H "Content-Type: application/json" -d \'{"x":300,"y":250}\'')
+    print(f"    curl {control_url}/submission")
+    print("=" * 76)
+    print()
     try:
-        raw = sandbox.read_file("/tmp/submission.json")
-    except Exception as e:  # noqa: BLE001
-        raise RuntimeError(f"no submission found: {e}")
-    text = raw.decode() if isinstance(raw, (bytes, bytearray)) else raw
-    data = json.loads(text)
-    items = data.get("items", [])
-    total = data.get("total", 0)
-    print(f"    trip:   {data.get('trip_name')!r}")
-    print(f"    items:  {len(items)}")
-    for it in items:
-        print(f"      - {it.get('category'):<18} ${float(it.get('amount', 0)):>8.2f}  {it.get('description')}")
-    print(f"    total:  ${float(total):.2f}")
-    print("    [ok] form submission recorded")
+        input("Press Enter to delete the sandbox when you're done... ")
+    except (EOFError, KeyboardInterrupt):
+        print()
 
 
-# --------------------------------------------------------------------------
-# main
-# --------------------------------------------------------------------------
-
-def main() -> int:
+async def _amain(args: argparse.Namespace) -> int:
     _load_env()
-    region = os.environ["ACA_SANDBOXGROUP_REGION"]
-    sub = os.environ["AZURE_SUBSCRIPTION_ID"]
-    rg = os.environ["ACA_RESOURCE_GROUP"]
-    sg = os.environ["ACA_SANDBOX_GROUP"]
-    deployment = os.environ["AZURE_OPENAI_COMPUTER_USE_DEPLOYMENT"]
-
+    deployment = None
+    if not args.manual:
+        deployment = _require("AZURE_OPENAI_COMPUTER_USE_DEPLOYMENT")
     run_id = uuid.uuid4().hex[:8]
     credential = DefaultAzureCredential()
     client = SandboxGroupClient(
-        endpoint_for_region(region),
+        endpoint_for_region(_require("ACA_SANDBOXGROUP_REGION")),
         credential,
-        subscription_id=sub,
-        resource_group=rg,
-        sandbox_group=sg,
-    )
-    aoai = AzureOpenAI(
-        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-        api_key=os.environ["AZURE_OPENAI_API_KEY"],
-        api_version=os.environ.get("AZURE_OPENAI_API_VERSION", DEFAULT_API_VERSION),
+        subscription_id=_require("AZURE_SUBSCRIPTION_ID"),
+        resource_group=_require("ACA_RESOURCE_GROUP"),
+        sandbox_group=_require("ACA_SANDBOX_GROUP"),
     )
 
     sandbox = None
+    rc = 1
     try:
         print(f"==> Booting sandbox (run={run_id})...")
-        # 4 GB / 2 vCPU is comfortable for Chromium + Xvfb + a control server.
         sandbox = client.begin_create_sandbox(
             disk="ubuntu",
             cpu="2000m",
             memory="4096Mi",
-            labels={"scenario": "computer-use", "vendor": "openai", "run": run_id},
+            labels={"scenario": "computer-use", "run": run_id},
         ).result()
         print(f"    sandbox: {sandbox.sandbox_id}")
 
         _upload_desktop_image(sandbox)
+        # If the user passed --start-url, retarget Chrome before setup boots it.
+        if args.start_url:
+            sandbox.exec(
+                f"sed -i 's|--app=http://localhost:8080/|--app={args.start_url}|' "
+                "/opt/desktop/setup.sh"
+            )
         _install_desktop(sandbox)
 
         print("==> Exposing ports...")
         control_url = _expose(sandbox, CONTROL_PORT, "control")
         novnc_url = _expose(sandbox, NOVNC_PORT, "noVNC")
 
-        # Lock down egress: deny by default. The agent talks only to
-        # localhost (the form + control server) -- no internet needed.
-        # The operator (this script) reaches the control server via the
-        # ACA-minted public URL, which is ingress, not the sandbox's egress.
-        print("==> Locking egress: default = Deny (no allow rules)...")
-        sandbox.set_egress_default("Deny")
+        if args.allow_internet:
+            print("==> Leaving sandbox egress open (--allow-internet).")
+        else:
+            # Lock egress down AFTER setup ran (apt needed internet). The agent
+            # talks only to localhost:8080 inside the sandbox; the operator
+            # process here talks to control_url via ACA ingress, independent of
+            # the sandbox's egress.
+            print("==> Locking sandbox egress (deny-by-default)...")
+            sandbox.set_egress_default("Deny")
 
-        print()
-        print("=" * 72)
-        print(f"  Watch the agent work in your browser:")
-        print(f"    {novnc_url}/vnc.html?autoconnect=1&resize=remote")
-        print("=" * 72)
-        print()
-
-        computer = ACAComputer(base_url=control_url, dimensions=(DISPLAY_W, DISPLAY_H))
-        computer.wait_until_ready(timeout=90)
-
-        final = run_agent(aoai, deployment, computer)
-        print()
-        print("==> Agent finished.")
-        if final:
-            print("--- final assistant message ---")
-            print(final)
-            print("-------------------------------")
-
-        _verify(sandbox)
-        return 0
+        if args.manual:
+            _manual_wait(control_url, novnc_url)
+            rc = 0
+        else:
+            spectate = f"{novnc_url}/vnc.html?autoconnect=1&resize=remote"
+            prompt = args.prompt or TASK_PROMPT
+            print()
+            print("=" * 76)
+            print("  Open this URL in your browser to watch the agent live:")
+            print()
+            print(f"    {spectate}")
+            print()
+            print("  Task the agent will perform:")
+            print()
+            first = prompt.strip().splitlines()[0]
+            print(f"    {first}{'...' if len(prompt.strip()) > len(first) else ''}")
+            print()
+            print("  Press Enter to launch the agent.")
+            print("=" * 76)
+            try:
+                input("> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+            rc = await _run_agent(control_url, deployment, prompt)
     finally:
         if sandbox is not None:
             print(f"==> Deleting sandbox {sandbox.sandbox_id}...")
@@ -345,18 +304,49 @@ def main() -> int:
                 sandbox.delete()
             except Exception as e:  # noqa: BLE001
                 print(f"    warning: delete failed: {e}")
-        else:
-            print(f"==> Sweeping any leaked sandboxes with run={run_id}...")
-            try:
-                for s in client.list_sandboxes(labels={"run": run_id}):
-                    try:
-                        client.delete_sandbox(s.id)
-                    except Exception:
-                        pass
-            except Exception as e:  # noqa: BLE001
-                print(f"    warning: sweep failed: {e}")
         client.close()
         credential.close()
+    return rc
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--manual",
+        action="store_true",
+        help="skip the agent loop; bring up the desktop and wait for Enter",
+    )
+    parser.add_argument(
+        "--prompt",
+        "-p",
+        type=str,
+        default=None,
+        help=(
+            "task to give the agent. Defaults to the built-in expense-report "
+            "form demo. Pass any instruction here, e.g. "
+            '-p "go to https://news.ycombinator.com and tell me the top story"'
+        ),
+    )
+    parser.add_argument(
+        "--start-url",
+        type=str,
+        default=None,
+        help=(
+            "URL to point Chrome at before the agent starts. Defaults to the "
+            "in-sandbox demo form (http://localhost:8080/). Useful with "
+            "--prompt to point at a real site."
+        ),
+    )
+    parser.add_argument(
+        "--allow-internet",
+        action="store_true",
+        help=(
+            "Skip the egress lockdown so the sandbox can reach the public "
+            "internet. Required when --start-url points to an external site."
+        ),
+    )
+    args = parser.parse_args()
+    return asyncio.run(_amain(args))
 
 
 if __name__ == "__main__":

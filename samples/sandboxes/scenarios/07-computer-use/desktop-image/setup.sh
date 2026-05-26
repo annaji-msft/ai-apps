@@ -14,29 +14,47 @@
 
 set -euo pipefail
 
+# On any failure, dump the apt log so the caller (sandbox.exec) sees why.
+trap 'rc=$?; echo "---setup.sh FAILED (rc=$rc)---" >&2; tail -n 80 /var/log/desktop/apt.log 2>/dev/null >&2 || true; exit $rc' ERR
+
 export DEBIAN_FRONTEND=noninteractive
 export DISPLAY=:99
 
 mkdir -p /opt/desktop /var/log/desktop
 
 # ----------------------------------------------------------------------------
-# Packages. Kept minimal; the heavy hitters are Chromium and noVNC.
+# Packages. Kept minimal; the heavy hitters are Chrome and noVNC.
+#
+# Important: we do NOT use `chromium-browser` from Ubuntu's archive because on
+# 22.04+ it's a transitional package that requires snapd (unavailable in this
+# container). Google Chrome's .deb works cleanly.
 # ----------------------------------------------------------------------------
-if ! command -v Xvfb >/dev/null 2>&1; then
+if ! command -v google-chrome >/dev/null 2>&1; then
   apt-get update -qq
+  # Detect the python3 minor version so we can install the matching venv pkg
+  # (the metapackage `python3-venv` lags behind the default python on some
+  # images, e.g. Ubuntu 26.04 ships python 3.14).
+  PY_VER="$(python3 -c 'import sys;print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
   apt-get install -y --no-install-recommends \
     xvfb x11vnc xdotool scrot imagemagick \
-    python3 python3-pip python3-venv \
-    chromium-browser \
+    "python${PY_VER}-venv" python3-pip \
     novnc websockify \
-    fonts-dejavu-core ca-certificates curl \
+    fonts-dejavu-core ca-certificates curl wget gnupg \
     >/var/log/desktop/apt.log 2>&1
+
+  # Chrome's .deb declares its own runtime deps (libnss3, libgbm1, libgtk-3-0,
+  # libasound2t64, ...). Letting apt resolve them avoids the noble->resolute
+  # package-name drift we'd otherwise have to track ourselves.
+  curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    -o /tmp/google-chrome.deb >>/var/log/desktop/apt.log 2>&1
+  apt-get install -y /tmp/google-chrome.deb >>/var/log/desktop/apt.log 2>&1
+  rm -f /tmp/google-chrome.deb
 fi
 
-# Some Ubuntu images ship `chromium` instead of `chromium-browser`.
-CHROMIUM_BIN="$(command -v chromium-browser || command -v chromium || true)"
-if [ -z "$CHROMIUM_BIN" ]; then
-  echo "ERROR: no chromium binary found" >&2
+CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
+if [ -z "$CHROME_BIN" ]; then
+  echo "ERROR: no chrome binary found" >&2
+  tail -30 /var/log/desktop/apt.log >&2 || true
   exit 1
 fi
 
@@ -57,7 +75,7 @@ pkill -f "Xvfb :99"              2>/dev/null || true
 pkill -f "x11vnc"                2>/dev/null || true
 pkill -f "websockify"            2>/dev/null || true
 pkill -f "control_server"        2>/dev/null || true
-pkill -f "chromium"              2>/dev/null || true
+pkill -f "chrome"                2>/dev/null || true
 sleep 1
 
 # ----------------------------------------------------------------------------
@@ -96,10 +114,10 @@ for _ in $(seq 1 40); do
 done
 
 # ----------------------------------------------------------------------------
-# Chromium — kiosk-launched at the demo form. --no-sandbox is required
+# Chrome — kiosk-launched at the demo form. --no-sandbox is required
 # inside containers without user namespaces.
 # ----------------------------------------------------------------------------
-nohup "$CHROMIUM_BIN" \
+nohup "$CHROME_BIN" \
     --no-sandbox \
     --disable-dev-shm-usage \
     --disable-gpu \
@@ -109,8 +127,9 @@ nohup "$CHROMIUM_BIN" \
     --start-maximized \
     --window-size=1280,800 \
     --window-position=0,0 \
+    --user-data-dir=/tmp/chrome-profile \
     --app=http://localhost:8080/ \
-  >/var/log/desktop/chromium.log 2>&1 &
+  >/var/log/desktop/chrome.log 2>&1 &
 
 # ----------------------------------------------------------------------------
 # x11vnc -> noVNC on :6080. -forever survives client disconnects;
