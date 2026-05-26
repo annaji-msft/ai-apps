@@ -7,7 +7,7 @@ python run.py
 
 Configuration comes from `samples/.env` (written by
 `samples/sandboxes/setup/python/setup.py`). Override the sandbox disk
-with `ACA_MCP_DISK=...` (default: `copilot`).
+with the `ACA_MCP_DISK` environment variable (default: `copilot`).
 
 See the [pattern README](../README.md) for what this does, the chat
 prompts you can try, and how to verify the MCP URL from VS Code /
