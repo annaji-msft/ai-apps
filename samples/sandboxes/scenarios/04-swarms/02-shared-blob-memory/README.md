@@ -1,4 +1,4 @@
-# 03 — Shared-blob memory swarm
+# 02 — Shared-blob memory swarm
 
 Same cross-group inception shape as
 [`01-basic-inception`](../01-basic-inception/) — an orchestrator
@@ -161,7 +161,7 @@ the aggregated payload — proving the data is still there once
 ## Run it
 
 ```bash
-cd samples/sandboxes/scenarios/04-swarms/03-shared-blob-memory/python
+cd samples/sandboxes/scenarios/04-swarms/02-shared-blob-memory/python
 pip install -r requirements.txt
 python swarm.py
 ```
@@ -222,7 +222,7 @@ for path in sorted(glob.glob(f"/mnt/shared/{run_id}/worker-*.json")):
 
 Variant 01 sends a single Pi estimate back from each worker via
 stdout — workers cannot see each other and nothing about them
-survives the run. Variant 03 keeps that orchestrator-driven inception
+survives the run. Variant 02 keeps that orchestrator-driven inception
 shape and adds a shared filesystem that *every* sandbox in the worker
 group can read and write — turning a stateless fan-out into a
 stateful multi-agent system.

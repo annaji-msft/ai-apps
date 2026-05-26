@@ -71,7 +71,7 @@ that uses these samples.
   ships (orchestrator sandbox spawns N workers in another group via its
   group's system-assigned MI; Monte Carlo Pi demo across `asyncio.gather`
   in Python and `aca --managed-identity` + bash `&` in CLI). Variant
-  [`03-shared-blob-memory`](sandboxes/scenarios/04-swarms/03-shared-blob-memory/README.md)
+  [`02-shared-blob-memory`](sandboxes/scenarios/04-swarms/02-shared-blob-memory/README.md)
   ships (same inception shape plus a sandbox-group AzureBlob volume as
   durable shared scratchpad: workers stream JSON checkpoints, an
   aggregator sandbox lists the prefix after workers are gone).

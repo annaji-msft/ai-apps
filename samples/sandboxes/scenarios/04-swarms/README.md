@@ -45,7 +45,7 @@ flowchart LR
 | # | Folder | Orchestrator | Dispatch | Status |
 |---|---|---|---|---|
 | 01 | [`01-basic-inception`](01-basic-inception) | Sandbox in Group A | In-process `asyncio.gather` / bash `&` over `aca --managed-identity sandbox create` | ✅ ready |
-| 03 | [`03-shared-blob-memory`](03-shared-blob-memory) | Sandbox in Group A | Same MI fan-out as 01, **plus a shared Azure Blob container** workers use as durable scratchpad / shared agent memory | ✅ ready |
+| 02 | [`02-shared-blob-memory`](02-shared-blob-memory) | Sandbox in Group A | Same MI fan-out as 01, **plus a shared Azure Blob container** workers use as durable scratchpad / shared agent memory | ✅ ready |
 
 ## When to pick which
 
@@ -54,7 +54,7 @@ flowchart LR
   bash `&`), and there's no extra infrastructure to operate. Best
   starting point and the right shape when the orchestrator is *itself*
   an LLM agent that needs to spin up sub-agents on demand.
-- **03-shared-blob-memory** — same identity-inception shape as 01,
+- **02-shared-blob-memory** — same identity-inception shape as 01,
   but with an Azure Blob container the orchestrator and every worker
   read and write through their managed identities. Right shape when
   workers must hand off partial results to siblings, when a

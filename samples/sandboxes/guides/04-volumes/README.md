@@ -62,6 +62,6 @@ What you write in the sandbox stays as plain stdlib (`open`,
 storage. The volume *is* the API.
 
 The same primitive backs the
-[`04-swarms / 03-shared-blob-memory`](../../scenarios/04-swarms/03-shared-blob-memory/)
+[`04-swarms / 02-shared-blob-memory`](../../scenarios/04-swarms/02-shared-blob-memory/)
 scenario, where a swarm of agents uses one volume as a durable
 shared scratchpad.
