@@ -52,6 +52,65 @@ flowchart LR
     orch -- "aggregated result" --> host
 ```
 
+## Where each piece of code runs
+
+The demo is one file (`python/swarm.py`) but it executes across
+three layers. Knowing which layer holds which identity is the key
+to understanding the security boundary:
+
+| Layer | Code | Where it runs | Identity it uses |
+|---|---|---|---|
+| **Host** | `main()`, group/role/volume setup, output parsing | Your laptop / CI runner | Your `az login` (`DefaultAzureCredential`) |
+| **Orchestrator** | `SPAWN_WORKERS_SCRIPT` | Sandbox in **Group A** | Group A's **system-assigned MI** (used to call the SandboxGroup data plane on **Group B**) |
+| **Workers** (×N) | `WORKER_PY` | Sandboxes in **Group B** | None — `open()` against a mounted path |
+| **Aggregator** (×1) | `AGGREGATOR_PY` | Sandbox in **Group B**, started after workers exit | None — `glob` + `open()` against the same path |
+
+The host runs *once* and never touches the volume. The orchestrator
+runs *inside a sandbox* and only talks to the SandboxGroup data
+plane (via MI). Workers and the aggregator are single-purpose
+containers with no Azure credentials at all — the platform
+brokers their access to shared storage via the mount.
+
+## How a swarm run unfolds
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Host
+    participant ARM as Azure ARM
+    participant WG as Worker group
+    participant V as Volume<br/>shared-memory
+    participant O as Orchestrator sandbox
+    participant W as Workers (4×)
+    participant A as Aggregator sandbox
+
+    H->>ARM: create orch group (SystemAssigned MI) + worker group
+    H->>ARM: grant 'Data Owner' on worker group → orch MI
+    H->>WG: create_volume("shared-memory", AzureBlob)
+    H->>O: begin_create_sandbox in orch group
+    H->>O: ship SDK wheel + spawn_workers.py + pip install
+    H->>O: exec spawn_workers.py
+    Note over O: ↓ runs INSIDE the orchestrator
+    par worker 0..3 (asyncio.gather)
+        O->>W: begin_create_sandbox(volumes=[/mnt/shared]) via MI
+        O->>W: write_file worker.py + exec
+        W->>V: open /mnt/shared/{run}/worker-i.json (5 checkpoints)
+        W-->>O: stdout "DONE worker=i ..."
+        O->>W: delete
+    end
+    O->>A: begin_create_sandbox(volumes=[/mnt/shared]) via MI
+    O->>A: write_file aggregate.py + exec
+    A->>V: glob + open /mnt/shared/{run}/worker-*.json
+    A-->>O: stdout "AGGREGATED_FILES=4 RESULT=[...]"
+    O->>A: delete
+    O-->>H: stdout (DONE lines + RESULT json)
+    H->>O: delete · H->>WG: delete_volume · H->>ARM: delete both groups
+```
+
+For the general "what the volume primitive gives you vs. what
+you'd build yourself" framing, see
+[`guides/04-volumes`](../../../guides/04-volumes/).
+
 ## What makes this compelling
 
 1. **Durable shared scratchpad** — checkpoints survive the workers
