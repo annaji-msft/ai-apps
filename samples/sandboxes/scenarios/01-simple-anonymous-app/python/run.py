@@ -1,16 +1,9 @@
-"""Web app in a sandbox — Entra ID protected port (Python SDK).
+"""Simple anonymous web app in a sandbox (Python SDK).
 
-Same flow as ``webapp_anonymous.py`` except the public port is gated by
-Entra ID: only the email in ``ACA_USER_EMAIL`` (captured at setup time)
-can sign in to access it.
-
-Verification:
-  * In-sandbox curl returns 200 + JSON shape (no proxy in the path).
-  * Host-side anonymous curl returns a non-2xx — proves the gate works.
-  * Programmatic curl with a bearer token is intentionally not attempted
-    here (the token audience for the port proxy is platform-defined and
-    isn't documented in the SDK reference). Open the URL in a browser and
-    sign in as ``ACA_USER_EMAIL`` to reach the app interactively.
+Creates a sandbox on the `node-22` public disk, uploads the Node app from
+the sibling ``app/`` directory, starts it on port 8080, exposes that port
+anonymously (open to the internet), and verifies the response both from
+inside the sandbox and from the host machine.
 
 Reads configuration from ``samples/.env`` (written by
 ``samples/sandboxes/setup/python/setup.py`` or ``setup/cli/setup.sh``).
@@ -38,6 +31,7 @@ PORT = 8080
 
 
 def _load_env() -> None:
+    """Load samples/.env; exit with a friendly error if it isn't there yet."""
     for parent in Path(__file__).resolve().parents:
         env = parent / ".env"
         if env.is_file():
@@ -54,6 +48,7 @@ def _load_env() -> None:
 
 
 def _poll_in_sandbox(sandbox, url: str, timeout_s: int = 30) -> None:
+    """Curl `url` from inside the sandbox until it returns 200 or we time out."""
     deadline = time.monotonic() + timeout_s
     last = ""
     while time.monotonic() < deadline:
@@ -71,51 +66,27 @@ def _poll_in_sandbox(sandbox, url: str, timeout_s: int = 30) -> None:
     )
 
 
-def _poll_in_sandbox_json(sandbox, url: str) -> dict:
-    result = sandbox.exec(f"curl -fsS {url}")
-    if result.exit_code != 0:
-        raise RuntimeError(f"in-sandbox curl failed for {url}: {result.stderr}")
-    return json.loads(result.stdout)
-
-
-def _poll_public_unauthenticated(url: str, timeout_s: int = 60) -> int:
-    """Hit `url` without auth until proxy answers; return the (non-200) status."""
+def _poll_public(url: str, timeout_s: int = 60) -> dict:
+    """Fetch `url` from the host until it returns 200 + JSON or we time out."""
     deadline = time.monotonic() + timeout_s
-    last_status = 0
+    last_err = ""
     while time.monotonic() < deadline:
-        req = urllib.request.Request(url, method="GET")
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                last_status = resp.status
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                if resp.status == 200:
+                    return json.loads(resp.read().decode())
+                last_err = f"http {resp.status}"
         except urllib.error.HTTPError as e:
-            last_status = e.code  # the proxy answered with a status — what we want
-            if last_status in (401, 403):
-                return last_status
-            if last_status == 302:  # redirect to login is also fine
-                return last_status
-        except urllib.error.URLError:
-            pass
-        # 200 means the proxy isn't enforcing auth yet, keep polling
-        if last_status and last_status != 200:
-            return last_status
+            last_err = f"http {e.code}"
+        except urllib.error.URLError as e:
+            last_err = f"urlerror {e.reason}"
         time.sleep(2)
-    raise RuntimeError(
-        f"proxy did not return a recognizable non-2xx after {timeout_s}s "
-        f"(last status: {last_status}); is the Entra gate up?"
-    )
+    raise RuntimeError(f"public URL not ready after {timeout_s}s (last: {last_err})")
 
 
 def main() -> None:
     _load_env()
     disk = os.environ.get("ACA_WEBAPP_DISK", "node-22")
-    email = os.environ.get("ACA_USER_EMAIL", "").strip()
-    if not email:
-        sys.exit(
-            "error: ACA_USER_EMAIL is empty in samples/.env. This scenario "
-            "gates the public port to a specific Entra ID user. Re-run "
-            "setup as a human user, or set ACA_USER_EMAIL manually in "
-            "samples/.env to a member of your tenant."
-        )
 
     credential = DefaultAzureCredential()
     client = SandboxGroupClient(
@@ -147,41 +118,42 @@ def main() -> None:
         _poll_in_sandbox(sandbox, f"http://localhost:{PORT}/healthz")
         print("    server is ready")
 
-        print("==> In-sandbox JSON shape checks...")
-        hello = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/api/hello")
-        assert hello.get("message") == "Hello from sandbox", hello
-        health = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/healthz")
-        assert health.get("status") == "ok", health
-        info = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/api/info")
-        assert "node" in info and "platform" in info, info
-        print(f"    GET /api/hello -> {hello}")
-        print(f"    GET /healthz   -> {health}")
-        print(f"    GET /api/info  -> {info}")
-        # And the HTML landing page.
-        root = sandbox.exec(f"curl -fsS -o /dev/null -w '%{{http_code}}' http://localhost:{PORT}/")
-        assert (root.stdout or "").strip() == "200", root.stdout
-        print(f"    GET /           -> http 200 (HTML landing page)")
-
-        print(f"==> add_port({PORT}, email={email!r})")
-        port = sandbox.add_port(PORT, email=email)
+        print(f"==> add_port({PORT}, anonymous=True)")
+        port = sandbox.add_port(PORT, anonymous=True)
         port_added = True
         url = getattr(port, "url", None)
         if not url:
             raise RuntimeError("add_port did not return a URL")
         print(f"    public URL: {url}")
 
-        print("==> Verifying the Entra ID gate (host-side, NO auth)...")
-        status = _poll_public_unauthenticated(url)
-        assert status != 200, (
-            f"expected the Entra gate to reject anonymous access but got "
-            f"http {status} — is `email=` actually being honored?"
-        )
-        print(f"    anonymous GET -> http {status} (gate is working)")
+        print("==> Verifying public URL (host-side)...")
+        # `/` is HTML; JSON endpoints under /api/* and /healthz.
+        deadline_html = None
+        body_html = None
+        for path in ("/healthz", "/api/hello", "/api/info"):
+            body = _poll_public(url.rstrip("/") + path)
+            print(f"    GET {path} -> {body}")
+        # HTML smoke check on /
+        import urllib.request as _u
+        with _u.urlopen(url, timeout=10) as resp:
+            assert resp.status == 200, resp.status
+            ctype = resp.headers.get("Content-Type", "")
+            assert "text/html" in ctype, ctype
+            body_html = resp.read().decode("utf-8", errors="replace")
+        assert "Hello from a sandbox" in body_html, "landing page missing greeting"
+        print(f"    GET / -> 200 text/html ({len(body_html)} bytes, contains greeting)")
 
-        print()
-        print("==> Done. To reach the app interactively:")
-        print(f"    open {url}")
-        print(f"    and sign in as {email}")
+        # JSON-shape assertions on the API endpoints.
+        hello = _poll_public(url.rstrip("/") + "/api/hello")
+        assert hello.get("message") == "Hello from sandbox", hello
+        assert "hostname" in hello and "uptime" in hello, hello
+        health = _poll_public(url.rstrip("/") + "/healthz")
+        assert health.get("status") == "ok", health
+        info = _poll_public(url.rstrip("/") + "/api/info")
+        assert "node" in info and "platform" in info, info
+        print("==> All endpoint shape assertions passed.")
+
+        print("==> Done.")
     finally:
         if sandbox is not None and port_added:
             try:

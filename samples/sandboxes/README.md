@@ -76,13 +76,14 @@ documentation and how to override defaults.
 
 | # | Scenario | What it will show | Status |
 |---|---|---|---|
-| 01 | [webapps](scenarios/01-webapps) | Run a Node.js web app in a sandbox; expose port 8080 anonymously or gated by Entra ID — two variants | ✅ ready |
-| 02 | [coding-agents](scenarios/02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
-| 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
-| 04 | [swarms](scenarios/04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
-| 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
-| 06 | [developer-workflows](scenarios/06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
-| 07 | [computer-use](scenarios/07-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |
+| 01 | [simple-anonymous-app](scenarios/01-simple-anonymous-app) | Hello-world Node.js web app in a sandbox; expose port 8080 to the open internet | ✅ ready |
+| 02 | [entra-protected-app](scenarios/02-entra-protected-app) | Same app, but gate the port with Entra ID so only specific emails/tenants reach it | 📝 planned |
+| 03 | [coding-agents](scenarios/03-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
+| 04 | [code-interpreter](scenarios/04-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
+| 05 | [swarms](scenarios/05-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
+| 06 | [data-processing](scenarios/06-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
+| 07 | [developer-workflows](scenarios/07-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
+| 08 | [computer-use](scenarios/08-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |
 
 ## Reference
 

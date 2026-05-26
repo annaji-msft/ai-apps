@@ -1,0 +1,10 @@
+{
+  "name": "aca-simple-anonymous-app",
+  "version": "1.0.0",
+  "description": "Tiny Node HTTP server used by samples/sandboxes/scenarios/01-simple-anonymous-app.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

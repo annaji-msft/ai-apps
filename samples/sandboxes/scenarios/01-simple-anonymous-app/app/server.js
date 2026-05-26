@@ -1,4 +1,4 @@
-// Node HTTP server used by both webapp variants in scenarios/01-webapps.
+// Node HTTP server used by samples/sandboxes/scenarios/01-simple-anonymous-app.
 // Zero external dependencies — uses built-in http/os/fs so the sandbox
 // doesn't need `npm install` before starting.
 //
@@ -194,7 +194,7 @@ function page() {
     <nav class="flex items-center gap-3 text-sm">
       <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
          class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">Portal ↗</a>
-      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps"
+      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-simple-anonymous-app"
          target="_blank" rel="noopener"
          class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">GitHub ↗</a>
     </nav>
@@ -422,7 +422,7 @@ url = box.ports.add(<span class="text-amber-300">8080</span>, anonymous=<span cl
     <div>Served from <code class="text-slate-200">${h.hostname}</code> · started <code class="text-slate-200">${STARTED_AT.toISOString()}</code></div>
     <div class="flex gap-4">
       <a href="https://sandboxes.azure.com" target="_blank" rel="noopener" class="hover:text-white">sandboxes.azure.com ↗</a>
-      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>
+      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-simple-anonymous-app" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>
     </div>
   </div>
 </footer>

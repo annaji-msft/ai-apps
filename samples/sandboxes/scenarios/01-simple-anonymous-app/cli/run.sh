@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Web app in a sandbox - anonymous public port (aca CLI).
+# Simple anonymous web app in a sandbox (aca CLI).
 #
 # Creates a sandbox on node-22, uploads the Node app from ../app/, starts it
 # on :8080, exposes the port anonymously (open to the internet), and verifies
