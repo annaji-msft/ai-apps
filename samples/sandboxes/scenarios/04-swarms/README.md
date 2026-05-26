@@ -45,7 +45,6 @@ flowchart LR
 | # | Folder | Orchestrator | Dispatch | Status |
 |---|---|---|---|---|
 | 01 | [`01-mi-inception`](01-mi-inception) | Sandbox in Group A | In-process `asyncio.gather` / bash `&` over `aca --managed-identity sandbox create` | ✅ ready |
-| 02 | [`02-durable-functions`](02-durable-functions) | Azure Functions app using Durable Task Scheduler (DTS) | Activity functions create sandboxes via DTS fan-out / fan-in | 📝 planned |
 | 03 | [`03-shared-blob-memory`](03-shared-blob-memory) | Sandbox in Group A | Same MI fan-out as 01, **plus a shared Azure Blob container** workers use as durable scratchpad / shared agent memory | ✅ ready |
 
 ## When to pick which
@@ -55,13 +54,6 @@ flowchart LR
   bash `&`), and there's no extra infrastructure to operate. Best
   starting point and the right shape when the orchestrator is *itself*
   an LLM agent that needs to spin up sub-agents on demand.
-- **02-durable-functions** — durable, retry-safe swarms. The
-  orchestrator is an Azure Functions app bound to Durable Task
-  Scheduler, so fan-out / fan-in / history / replay / portal
-  observability come for free. Right shape when work items take
-  minutes-to-hours, when partial failures must resume rather than
-  restart, or when the swarm needs to be triggered by HTTP / queue /
-  timer instead of by a human running a script.
 - **03-shared-blob-memory** — same identity-inception shape as 01,
   but with an Azure Blob container the orchestrator and every worker
   read and write through their managed identities. Right shape when

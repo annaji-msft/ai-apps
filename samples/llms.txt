@@ -74,10 +74,7 @@ that uses these samples.
   [`03-shared-blob-memory`](sandboxes/scenarios/04-swarms/03-shared-blob-memory/README.md)
   ships (same MI inception plus an Azure Blob container as durable shared
   scratchpad: workers stream JSON checkpoints, orchestrator aggregates by
-  listing the prefix, host cross-checks via its own MI). Variant
-  [`02-durable-functions`](sandboxes/scenarios/04-swarms/02-durable-functions/README.md)
-  planned (Azure Functions app using Durable Task Scheduler for durable,
-  retry-safe fan-out).
+  listing the prefix, host cross-checks via its own MI).
 - [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
   Producer/consumer pipelines on shared AzureBlob volumes.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
