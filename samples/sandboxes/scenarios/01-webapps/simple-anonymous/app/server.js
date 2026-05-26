@@ -18,6 +18,8 @@ const fs = require('fs');
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const STARTED_AT = new Date();
+const IDLE_TIMEOUT_SEC = parseInt(process.env.IDLE_TIMEOUT_SEC || '1800', 10);
+let LAST_REQ_AT = Date.now();
 
 // ---------- helpers ----------
 
@@ -135,6 +137,7 @@ function sysinfo() {
 function stats() {
   const total = os.totalmem();
   const free = os.freemem();
+  const secondsSinceLastReq = Math.max(0, Math.round((Date.now() - LAST_REQ_AT) / 1000));
   return {
     uptime: Math.round(os.uptime()),
     loadavg: os.loadavg().map((n) => Math.round(n * 100) / 100),
@@ -145,6 +148,9 @@ function stats() {
     procCount: procCount(),
     serverUptime: Math.round(process.uptime()),
     serverPid: process.pid,
+    idleTimeoutSec: IDLE_TIMEOUT_SEC,
+    secondsSinceLastReq,
+    secondsUntilSuspend: Math.max(0, IDLE_TIMEOUT_SEC - secondsSinceLastReq),
   };
 }
 
@@ -215,6 +221,9 @@ function page() {
     </span>
     <span class="rounded-full bg-white/5 text-slate-300 px-3 py-1 ring-1 ring-white/10 font-mono">
       ${esc(h.hostname)} · up <span id="hero-uptime">${h.uptime}</span>s
+    </span>
+    <span class="rounded-full bg-amber-500/10 text-amber-300 px-3 py-1 ring-1 ring-amber-500/30 font-mono" title="Sandbox auto-suspends after this much idle time. Polling this page resets the timer.">
+      💤 sleeps in <span id="hero-sleep">…</span>
     </span>
     <span class="rounded-full bg-brand-500/10 text-brand-400 px-3 py-1 ring-1 ring-brand-500/30 font-mono">
       pattern: simple-anonymous · port 8080 open to the internet
@@ -548,6 +557,10 @@ sandbox.delete()
       document.getElementById('uptime-pretty').textContent = fmtUptime(d.uptime);
       document.getElementById('server-up').textContent = d.serverUptime;
       document.getElementById('server-pid').textContent = d.serverPid;
+      if (typeof d.secondsUntilSuspend === 'number') {
+        var sleepEl = document.getElementById('hero-sleep');
+        sleepEl.textContent = fmtUptime(d.secondsUntilSuspend) + ' (idle ' + fmtUptime(d.idleTimeoutSec) + ')';
+      }
       var fresh = document.getElementById('stats-fresh');
       fresh.classList.remove('text-rose-400'); fresh.classList.add('text-emerald-400');
     } catch (e) {
@@ -623,6 +636,7 @@ const routes = {
 
 http.createServer((req, res) => {
   const path = req.url.split('?')[0];
+  LAST_REQ_AT = Date.now();
   const route = routes[path];
   if (route) {
     route.handler(res);
