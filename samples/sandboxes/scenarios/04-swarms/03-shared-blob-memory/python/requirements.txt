@@ -1,0 +1,5 @@
+# Walks up 5 levels (python -> 03-shared-blob-memory -> 04-swarms -> scenarios -> sandboxes -> samples)
+-r ../../../../../requirements.txt
+
+azure-mgmt-storage>=21.0
+azure-storage-blob>=12.19

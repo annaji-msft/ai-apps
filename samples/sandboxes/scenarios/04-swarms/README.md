@@ -46,6 +46,7 @@ flowchart LR
 |---|---|---|---|---|
 | 01 | [`01-mi-inception`](01-mi-inception) | Sandbox in Group A | In-process `asyncio.gather` / bash `&` over `aca --managed-identity sandbox create` | ✅ ready |
 | 02 | [`02-durable-functions`](02-durable-functions) | Azure Functions app using Durable Task Scheduler (DTS) | Activity functions create sandboxes via DTS fan-out / fan-in | 📝 planned |
+| 03 | [`03-shared-blob-memory`](03-shared-blob-memory) | Sandbox in Group A | Same MI fan-out as 01, **plus a shared Azure Blob container** workers use as durable scratchpad / shared agent memory | ✅ ready |
 
 ## When to pick which
 
@@ -61,6 +62,13 @@ flowchart LR
   minutes-to-hours, when partial failures must resume rather than
   restart, or when the swarm needs to be triggered by HTTP / queue /
   timer instead of by a human running a script.
+- **03-shared-blob-memory** — same identity-inception shape as 01,
+  but with an Azure Blob container the orchestrator and every worker
+  read and write through their managed identities. Right shape when
+  workers must hand off partial results to siblings, when a
+  half-finished work-item needs to survive a worker crash, or when
+  the swarm acts as a multi-agent system whose "shared memory" lives
+  on durable storage instead of in any one process.
 
 Both variants share the same identity model: the orchestrator's
 identity has `Container Apps SandboxGroup Data Owner` on the worker
