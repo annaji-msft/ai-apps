@@ -1,4 +1,4 @@
-# 01 — Basic inception
+# 01 — Sandbox inception
 
 An orchestrator agent running **inside** a sandbox in Group A spawns N
 worker sandboxes in Group B, dispatches a task to each, and aggregates

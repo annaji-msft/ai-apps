@@ -1,7 +1,7 @@
-"""Swarm with shared-blob memory — basic inception + a sandbox-group AzureBlob volume.
+"""Swarm with shared-blob memory — sandbox inception + a sandbox-group AzureBlob volume.
 
 Same cross-group inception shape as
-``../../01-basic-inception/python/swarm.py``: a host script provisions
+``../../01-sandbox-inception/python/swarm.py``: a host script provisions
 two fresh sandbox groups (orchestrator with SystemAssigned MI, worker
 group with ``Data Owner`` granted to the orchestrator's MI), boots an
 orchestrator sandbox, then asks it to fan out N=4 Monte Carlo Pi

@@ -67,7 +67,7 @@ that uses these samples.
   LLM-driven code execution — generate, run, observe, iterate.
 - [04-swarms](sandboxes/scenarios/04-swarms/README.md):
   Orchestrator coordinating many sandbox workers. Variant
-  [`01-basic-inception`](sandboxes/scenarios/04-swarms/01-basic-inception/README.md)
+  [`01-sandbox-inception`](sandboxes/scenarios/04-swarms/01-sandbox-inception/README.md)
   ships (orchestrator sandbox spawns N workers in another group via its
   group's system-assigned MI; Monte Carlo Pi demo across `asyncio.gather`
   in Python and `aca --managed-identity` + bash `&` in CLI). Variant

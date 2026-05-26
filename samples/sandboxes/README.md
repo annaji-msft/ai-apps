@@ -79,7 +79,7 @@ documentation and how to override defaults.
 | 01 | [webapps](scenarios/01-webapps) | Run web apps inside sandboxes (server + public port + client) | 📝 planned |
 | 02 | [coding-agents](scenarios/02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
 | 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
-| 04 | [swarms](scenarios/04-swarms) | Orchestrator coordinating many sandbox workers — variants 01 (basic inception: orchestrator sandbox spawns workers in another group via its group's MI) and 03 (same plus an AzureBlob volume as durable shared scratchpad) ship now | ✅ ready |
+| 04 | [swarms](scenarios/04-swarms) | Orchestrator coordinating many sandbox workers — variants 01 (sandbox inception: orchestrator sandbox spawns workers in another group via its group's MI) and 02 (same plus an AzureBlob volume as durable shared scratchpad) ship now | ✅ ready |
 | 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
 | 06 | [developer-workflows](scenarios/06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
 | 07 | [computer-use](scenarios/07-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |

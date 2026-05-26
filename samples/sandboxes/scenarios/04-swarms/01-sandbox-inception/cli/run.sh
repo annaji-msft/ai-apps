@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Basic inception swarm — aca CLI variant.
+# Sandbox inception swarm — aca CLI variant.
 #
 # Story: a sandbox in orchestrator group A uses its group's
 # system-assigned managed identity to create and drive N worker
@@ -124,7 +124,7 @@ sleep 20
 
 # ---------------- 3. Orchestrator sandbox ----------------
 echo "==> Creating orchestrator sandbox (disk=ubuntu) in $ORCH_GROUP..."
-CREATE_OUT="$(aca sandbox create --disk ubuntu --label swarm=basic-inception --label role=orchestrator)"
+CREATE_OUT="$(aca sandbox create --disk ubuntu --label swarm=sandbox-inception --label role=orchestrator)"
 echo "$CREATE_OUT"
 ORCH_ID="$(printf '%s\n' "$CREATE_OUT" | sed -n 's/^Created sandbox: //p' | tail -n1)"
 if [[ -z "$ORCH_ID" ]]; then

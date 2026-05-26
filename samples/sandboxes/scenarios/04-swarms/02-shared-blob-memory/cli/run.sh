@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared-blob memory swarm — aca CLI variant.
 #
-# Same shape as 01-basic-inception/cli, plus: the worker group owns an
+# Same shape as 01-sandbox-inception/cli, plus: the worker group owns an
 # AzureBlob volume that every worker and the aggregator mount at
 # /mnt/shared. Workers checkpoint JSON to it; an aggregator sandbox
 # (spawned after the workers exit) globs and aggregates. The platform

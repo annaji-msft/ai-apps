@@ -1,7 +1,7 @@
 # 02 — Shared-blob memory swarm
 
 Same cross-group inception shape as
-[`01-basic-inception`](../01-basic-inception/) — an orchestrator
+[`01-sandbox-inception`](../01-sandbox-inception/) — an orchestrator
 sandbox in Group A uses its group's managed identity to fan out N
 workers in Group B — but with **one new piece**: the worker group owns
 a single `AzureBlob` volume that every worker mounts and writes to.
