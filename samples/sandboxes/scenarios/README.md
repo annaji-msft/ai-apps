@@ -1,13 +1,14 @@
 # Sandbox scenarios
 
-Composed use cases that combine multiple sandbox capabilities. `01-webapps`
-is ready today; the rest are placeholders — start with the
-[guides](../guides/) for runnable code on those topics.
+Composed use cases that combine multiple sandbox capabilities.
+`01-webapps` and `02-coding-agents` are ready today; the rest are
+placeholders — start with the [guides](../guides/) for runnable code
+on those topics.
 
 | # | Scenario | What it shows | Status |
 |---|---|---|---|
 | 01 | [webapps](01-webapps) | Run a web app in a sandbox; patterns include `simple-anonymous` (open to the internet) and (planned) `authenticated` (Entra-gated) | ✅ ready |
-| 02 | [coding-agents](02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
+| 02 | [coding-agents](02-coding-agents) | Run **Copilot CLI** in a sandbox with deny-default egress + portal-paste PAT injection (Python + CLI). Claude Code / Codex stubs included. | ✅ Copilot CLI ready |
 | 03 | [code-interpreter](03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
 | 04 | [swarms](04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
 | 05 | [data-processing](05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |

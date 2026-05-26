@@ -77,7 +77,7 @@ documentation and how to override defaults.
 | # | Scenario | What it will show | Status |
 |---|---|---|---|
 | 01 | [webapps](scenarios/01-webapps) | Run a web app in a sandbox; patterns include `simple-anonymous` (open to the internet) and (planned) `authenticated` (Entra-gated) | ✅ ready |
-| 02 | [coding-agents](scenarios/02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
+| 02 | [coding-agents](scenarios/02-coding-agents) | Run **Copilot CLI** in a sandbox with deny-default egress + portal-paste PAT injection (Python + CLI). Claude Code / Codex stubs included. | ✅ Copilot CLI ready |
 | 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
 | 04 | [swarms](scenarios/04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
 | 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
