@@ -101,10 +101,12 @@ fi
 echo "    server is ready"
 
 echo "==> In-sandbox JSON shape checks..."
-for path in "/" "/healthz" "/api/info"; do
+for path in "/api/hello" "/healthz" "/api/info"; do
     body="$(aca sandbox exec --id "$SANDBOX_ID" -c "curl -fsS http://localhost:$PORT$path" 2>/dev/null | tail -n+1)"
     echo "    GET $path -> $body"
 done
+root_code="$(aca sandbox exec --id "$SANDBOX_ID" -c "curl -fsS -o /dev/null -w '%{http_code}' http://localhost:$PORT/" 2>/dev/null | tail -n1 | tr -d '[:space:]')"
+echo "    GET /         -> http $root_code (HTML landing page)"
 
 echo "==> aca sandbox port add --port $PORT --email $EMAIL"
 PORT_OUTPUT="$(aca sandbox port add --id "$SANDBOX_ID" --port "$PORT" --email "$EMAIL" -o json)"

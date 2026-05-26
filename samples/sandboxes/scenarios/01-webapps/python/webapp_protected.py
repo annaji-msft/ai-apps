@@ -148,15 +148,19 @@ def main() -> None:
         print("    server is ready")
 
         print("==> In-sandbox JSON shape checks...")
-        root = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/")
-        assert root.get("message") == "Hello from sandbox", root
+        hello = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/api/hello")
+        assert hello.get("message") == "Hello from sandbox", hello
         health = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/healthz")
         assert health.get("status") == "ok", health
         info = _poll_in_sandbox_json(sandbox, f"http://localhost:{PORT}/api/info")
         assert "node" in info and "platform" in info, info
-        print(f"    GET / -> {root}")
-        print(f"    GET /healthz -> {health}")
-        print(f"    GET /api/info -> {info}")
+        print(f"    GET /api/hello -> {hello}")
+        print(f"    GET /healthz   -> {health}")
+        print(f"    GET /api/info  -> {info}")
+        # And the HTML landing page.
+        root = sandbox.exec(f"curl -fsS -o /dev/null -w '%{{http_code}}' http://localhost:{PORT}/")
+        assert (root.stdout or "").strip() == "200", root.stdout
+        print(f"    GET /           -> http 200 (HTML landing page)")
 
         print(f"==> add_port({PORT}, email={email!r})")
         port = sandbox.add_port(PORT, email=email)

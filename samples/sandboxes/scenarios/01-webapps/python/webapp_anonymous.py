@@ -129,14 +129,26 @@ def main() -> None:
         print(f"    public URL: {url}")
 
         print("==> Verifying public URL (host-side)...")
-        for path in ("/", "/healthz", "/api/info"):
+        # `/` is HTML; JSON endpoints under /api/* and /healthz.
+        deadline_html = None
+        body_html = None
+        for path in ("/healthz", "/api/hello", "/api/info"):
             body = _poll_public(url.rstrip("/") + path)
             print(f"    GET {path} -> {body}")
+        # HTML smoke check on /
+        import urllib.request as _u
+        with _u.urlopen(url, timeout=10) as resp:
+            assert resp.status == 200, resp.status
+            ctype = resp.headers.get("Content-Type", "")
+            assert "text/html" in ctype, ctype
+            body_html = resp.read().decode("utf-8", errors="replace")
+        assert "Hello from a sandbox" in body_html, "landing page missing greeting"
+        print(f"    GET / -> 200 text/html ({len(body_html)} bytes, contains greeting)")
 
-        # Shape assertions.
-        root = _poll_public(url)
-        assert root.get("message") == "Hello from sandbox", root
-        assert "hostname" in root and "uptime" in root, root
+        # JSON-shape assertions on the API endpoints.
+        hello = _poll_public(url.rstrip("/") + "/api/hello")
+        assert hello.get("message") == "Hello from sandbox", hello
+        assert "hostname" in hello and "uptime" in hello, hello
         health = _poll_public(url.rstrip("/") + "/healthz")
         assert health.get("status") == "ok", health
         info = _poll_public(url.rstrip("/") + "/api/info")

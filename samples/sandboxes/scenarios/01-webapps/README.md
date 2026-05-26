@@ -10,10 +10,12 @@ Composes guides 01 (sandboxes) + 06 (ports) + 07 (files).
 
 ## What you get
 
-- A small Node.js HTTP server (in [`app/`](app/)) with three endpoints:
-  - `GET /` → `{ "message": "Hello from sandbox", "hostname", "uptime" }`
-  - `GET /healthz` → `{ "status": "ok" }`
-  - `GET /api/info` → `{ "node": "v22.x", "platform": "linux" }`
+- A small Node.js HTTP server (in [`app/`](app/)) with:
+  - `GET /` → a styled HTML landing page that explains what a sandbox is
+    and prints the host's runtime info live.
+  - `GET /healthz` → `{ "status": "ok" }` (JSON liveness probe)
+  - `GET /api/hello` → `{ "message": "Hello from sandbox", "hostname", "uptime", "pid" }`
+  - `GET /api/info` → `{ "node", "platform", "arch", "cpus", "memoryMB", "startedAt" }`
 - A Python SDK and an `aca` CLI driver, each in two variants.
 - Bounded readiness polling (no fragile `sleep N`) and JSON-shape
   assertions on every endpoint.

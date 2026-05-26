@@ -110,21 +110,31 @@ while :; do
     sleep 2
 done
 
-for path in "/" "/api/info"; do
+for path in "/api/hello" "/api/info"; do
     body="$(curl -fsS --max-time 10 "$URL$path")"
     echo "    GET $path -> $body"
 done
 
+# HTML landing page smoke check.
+html_code="$(curl -s -o /tmp/landing.html -w '%{http_code}' --max-time 10 "$URL/")"
+html_bytes="$(wc -c < /tmp/landing.html | tr -d ' ')"
+if [[ "$html_code" == "200" ]] && grep -q "Hello from a sandbox" /tmp/landing.html; then
+    echo "    GET /           -> http 200 (HTML, $html_bytes bytes)"
+else
+    echo "error: landing page check failed (code=$html_code, bytes=$html_bytes)" >&2
+    exit 1
+fi
+
 # Shape sanity check — try jq if present, fall back to python, else skip.
 if command -v jq >/dev/null 2>&1; then
     curl -fsS "$URL/healthz" | jq -e '.status == "ok"' >/dev/null
-    curl -fsS "$URL/" | jq -e '.message == "Hello from sandbox" and has("hostname") and has("uptime")' >/dev/null
+    curl -fsS "$URL/api/hello" | jq -e '.message == "Hello from sandbox" and has("hostname") and has("uptime")' >/dev/null
     curl -fsS "$URL/api/info" | jq -e 'has("node") and has("platform")' >/dev/null
     echo "==> All endpoint shape assertions passed."
 elif command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
     PY=$(command -v python3 || command -v python)
     curl -fsS "$URL/healthz" | "$PY" -c "import sys,json; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
-    curl -fsS "$URL/" | "$PY" -c "import sys,json; d=json.load(sys.stdin); assert d.get('message')=='Hello from sandbox', d; assert 'hostname' in d and 'uptime' in d"
+    curl -fsS "$URL/api/hello" | "$PY" -c "import sys,json; d=json.load(sys.stdin); assert d.get('message')=='Hello from sandbox', d; assert 'hostname' in d and 'uptime' in d"
     curl -fsS "$URL/api/info" | "$PY" -c "import sys,json; d=json.load(sys.stdin); assert 'node' in d and 'platform' in d, d"
     echo "==> All endpoint shape assertions passed."
 else
