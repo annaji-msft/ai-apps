@@ -13,4 +13,4 @@ on those topics.
 | 04 | [swarms](04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
 | 05 | [data-processing](05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
 | 06 | [developer-workflows](06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
-| 07 | [computer-use](07-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |
+| 07 | [computer-use](07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview`) driving Chromium inside a sandbox to fill out a form; watch live via noVNC | ✅ OpenAI ready |

@@ -1,0 +1,10 @@
+# Pin the SDK wheel that exposes the ACA sandbox client.
+# Use the same wheel as the rest of the sandboxes pillar so a customer who
+# has run `samples/sandboxes/setup/python/setup.py` already has it cached.
+-r ../../../../requirements.txt
+
+# Azure OpenAI SDK -- Responses API + computer_use_preview tool.
+openai>=1.54.0
+
+# Used by aca_computer.py to talk to the in-sandbox control server.
+requests>=2.32.0

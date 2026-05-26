@@ -84,7 +84,20 @@ that uses these samples.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
   PR builds, ephemeral CI, on-demand dev environments.
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
-  Browser/desktop automation inside a sandbox for agentic UI tasks.
+- [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
+  LLM computer-use agent driving a Linux desktop inside a sandbox.
+  Shared `desktop-image/` (Xvfb + Chrome + xdotool + noVNC + FastAPI
+  control server + demo expense-report form). Ships the `openai/` flow:
+  an Azure OpenAI `computer-use-preview` (gpt-5.4) deployment runs the
+  Responses API loop via the OpenAI Agents SDK (`AsyncComputer` +
+  `ComputerTool`), the `ACAAsyncComputer` adapter forwards each model
+  action to the in-sandbox control server, the agent fills out the form,
+  the script verifies `/tmp/submission.json`. noVNC URL printed so the
+  operator can watch live; `--manual` flag skips the LLM for platform
+  demos; `--prompt` + `--start-url` + `--allow-internet` aim it at any
+  site. Egress = deny-by-default with no allow rules (target is
+  sandbox-local). Composes guides 01 + 06 + 07 + 08; 03 for the optional
+  disk-image speed-up.
 - [08-sandbox-agents](sandboxes/scenarios/08-sandbox-agents/README.md):
   Wire agent frameworks to an ACA sandbox as their tool-execution
   backend. Harness (model calls, planning) stays in your control
