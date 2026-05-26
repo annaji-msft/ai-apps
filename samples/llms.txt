@@ -57,12 +57,16 @@ that uses these samples.
   region helpers, constants), pollers (sync vs `begin_*`, polling kwargs,
   parallel fan-out).
 
-## Sandboxes — scenarios (composed use cases — placeholders, coming soon)
+## Sandboxes — scenarios (composed use cases)
 
 - [01-webapps](sandboxes/scenarios/01-webapps/README.md):
-  Run web apps inside sandboxes — server + public port + client.
+  Web apps in sandboxes. Patterns: `simple-anonymous` (port open to the
+  internet, ready) and `authenticated` (Entra-gated, planned).
 - [02-coding-agents](sandboxes/scenarios/02-coding-agents/README.md):
-  Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox.
+  Run **GitHub Copilot CLI** inside a sandbox with deny-default egress
+  and PAT-injection Transform rules (Python + CLI). The customer's PAT
+  is attached to outbound requests by the egress proxy and never
+  enters the sandbox. Claude Code / Codex stubs included.
 - [03-code-interpreter](sandboxes/scenarios/03-code-interpreter/README.md):
   LLM-driven code execution — generate, run, observe, iterate.
 - [04-swarms](sandboxes/scenarios/04-swarms/README.md):

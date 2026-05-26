@@ -78,11 +78,13 @@ def _detect_subscription_id() -> str:
         )
 
 
-def _detect_principal() -> tuple[str, str]:
-    """Return (oid, principal_type) for the current credential.
+def _detect_principal() -> tuple[str, str, str]:
+    """Return (oid, principal_type, email) for the current credential.
 
     Uses the JWT ``oid`` claim from the management token (works for both
-    users and service principals; no Graph permission required).
+    users and service principals; no Graph permission required). The email
+    is read from ``upn`` / ``preferred_username`` and is empty for service
+    principals (which don't have one).
     """
     token = DefaultAzureCredential().get_token(
         "https://management.azure.com/.default"
@@ -91,12 +93,13 @@ def _detect_principal() -> tuple[str, str]:
     payload += "=" * (4 - len(payload) % 4)
     claims = json.loads(base64.urlsafe_b64decode(payload))
     oid = claims["oid"]
+    email = claims.get("upn") or claims.get("preferred_username") or ""
     idtyp = (claims.get("idtyp") or "").lower()
     if idtyp == "app":
-        return oid, "ServicePrincipal"
-    if idtyp == "user" or claims.get("upn") or claims.get("preferred_username"):
-        return oid, "User"
-    return oid, "ServicePrincipal"
+        return oid, "ServicePrincipal", ""
+    if idtyp == "user" or email:
+        return oid, "User", email
+    return oid, "ServicePrincipal", ""
 
 
 def _ensure_role_assignment(
@@ -148,7 +151,8 @@ def _write_env_file(values: dict[str, str]) -> None:
     ]
     for key in sorted(existing):
         lines.append(f"{key}={existing[key]}")
-    ENV_FILE.write_text("\n".join(lines) + "\n")
+    # Force LF line endings so bash `source` works on Windows checkouts.
+    ENV_FILE.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
     print(f"    wrote {ENV_FILE}")
 
 
@@ -185,10 +189,17 @@ def main() -> None:
             raise
 
     print(f"==> Assigning '{ROLE_NAME}'...")
-    principal_id, principal_type = _detect_principal()
+    principal_id, principal_type, user_email = _detect_principal()
     auth = AuthorizationManagementClient(credential, subscription_id)
     rg_scope = f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"
     _ensure_role_assignment(auth, rg_scope, principal_id, principal_type)
+
+    if not user_email:
+        print(
+            "    warning: could not detect a user email (likely a service "
+            "principal). Set ACA_USER_EMAIL in samples/.env manually if you "
+            "want to run the Entra-protected scenarios."
+        )
 
     print(f"==> Writing {ENV_FILE.relative_to(SAMPLES_DIR.parent)}...")
     _write_env_file({
@@ -198,6 +209,7 @@ def main() -> None:
         "ACA_SANDBOX_GROUP": sandbox_group,
         "ACA_SANDBOXGROUP_REGION": region,
         "ACA_REGION": region,
+        "ACA_USER_EMAIL": user_email,
     })
 
     print("==> Waiting briefly for RBAC propagation...")

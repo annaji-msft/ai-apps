@@ -24,7 +24,7 @@ guides you'll run.
 az login
 
 # 2. Clone
-git clone https://github.com/annaji-msft/aca && cd aca/samples
+git clone https://github.com/annaji-msft/ai-apps && cd ai-apps/samples
 
 # 3. Provision the pillar you want to try (one-time per pillar)
 cd sandboxes/setup/python && pip install -r requirements.txt && python setup.py
