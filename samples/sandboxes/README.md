@@ -71,6 +71,15 @@ documentation and how to override defaults.
 | 12 | [managed-identity](guides/12-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
 | 13 | [interactive-shell](guides/13-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
 
+### Deep dives — capabilities beyond the functional guides
+
+Reference docs covering SDK and CLI capabilities that the numbered guides don't focus on. Each is a single README with anchor-linked sections — jump to whichever topic you need.
+
+| Deep dive | Sections | Status |
+|---|---|---|
+| [SDK deep dive](guides/sdk) | Clients · Async · Logging · Exceptions · Helpers · Pollers | ✅ ready |
+| [CLI deep dive](guides/cli) | Auth · Help commands · Config deep dive · `doctor` · YAML spec workflow · Selectors · Output formats · Verbose and debug | ✅ ready |
+
 ### Scenarios — composed use cases (with production tips)
 
 | Scenario | Composes | Status |

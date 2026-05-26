@@ -46,6 +46,19 @@ that uses these samples.
 - [13-interactive-shell](sandboxes/guides/13-interactive-shell/README.md):
   `aca sandbox shell` — interactive PTY session into a running sandbox. CLI only.
 
+## Sandboxes — deep dives (capabilities beyond the functional guides)
+
+- [SDK deep dive](sandboxes/guides/sdk/README.md):
+  Single README with anchor-linked sections covering Clients (Mgmt / Group /
+  Sandbox), Async (`aio`), Logging, Exceptions, Helpers
+  (`wait_for_running` / `ensure_running`, region helpers, constants), and
+  Pollers (sync vs `begin_*`, polling kwargs, parallel fan-out).
+- [CLI deep dive](sandboxes/guides/cli/README.md):
+  Single README with anchor-linked sections covering Auth, Help commands,
+  Config deep dive (`~/.aca/config.json`, Shared vs Sandbox, precedence),
+  `doctor`, YAML spec workflow (`init` → `schema` → `validate` → `apply`),
+  Selectors, Output formats, and Verbose/debug.
+
 ## Sandboxes — scenarios (composed use cases)
 
 - [web-app-deployment](sandboxes/scenarios/web-app-deployment/README.md):
