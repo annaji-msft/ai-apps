@@ -57,38 +57,32 @@ documentation and how to override defaults.
 | # | Guide | What it shows | Status |
 |---|---|---|---|
 | 00 | [sandbox-groups](guides/00-sandbox-groups) | Create group, assign role, run sandbox, delete group | ✅ ready |
-| 01 | [sandboxes](guides/01-sandboxes) | Create sandbox, exec command, delete | ✅ ready |
-| 02 | [files](guides/02-files) | write / read / stat / list / mkdir / delete | ✅ ready |
-| 03 | [ports](guides/03-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |
-| 04 | [snapshots](guides/04-snapshots) | `create_snapshot`, restore into new sandbox | ✅ ready |
-| 05 | [egress](guides/05-egress) | `set_egress_default("Deny")` + host allow rules | ✅ ready |
-| 06 | [secrets](guides/06-secrets) | upsert / peek / list / delete (group-scoped) | ✅ ready |
-| 07 | [volumes](guides/07-volumes) | AzureBlob shared mounts across sandboxes | ✅ ready |
-| 08 | [labels](guides/08-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
-| 09 | [lifecycle](guides/09-lifecycle) | stop / resume + AutoSuspendPolicy + AutoDeletePolicy | ✅ ready |
-| 10 | [disks](guides/10-disks) | Build from container image **and** commit running sandbox to a disk (combined) | ✅ ready |
-| 11 | [async](guides/11-async) | `aio` SDK + `asyncio.gather` basics | ✅ ready |
-| 12 | [managed-identity](guides/12-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
-| 13 | [interactive-shell](guides/13-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
-| 14 | [cli-reference](guides/14-cli-reference) | `aca` CLI reference — install, auth, help, config, doctor, YAML, selectors, output, verbose | ✅ ready |
-| 15 | [sdk-reference](guides/15-sdk-reference) | Python SDK reference — install, clients, async, logging, exceptions, helpers, pollers | ✅ ready |
+| 01 | [sandboxes](guides/01-sandboxes) | Basic + advanced + parallel (asyncio) + YAML apply, all in one script | ✅ ready |
+| 02 | [snapshots](guides/02-snapshots) | `create_snapshot`, restore into new sandbox | ✅ ready |
+| 03 | [disks](guides/03-disks) | Build from container image **and** commit running sandbox to a disk (combined) | ✅ ready |
+| 04 | [volumes](guides/04-volumes) | AzureBlob shared mounts across sandboxes | ✅ ready |
+| 05 | [lifecycle](guides/05-lifecycle) | stop / resume + AutoSuspendPolicy + AutoDeletePolicy | ✅ ready |
+| 06 | [ports](guides/06-ports) | `add_port(anonymous=True)`, hit public URL | ✅ ready |
+| 07 | [files](guides/07-files) | write / read / stat / list / mkdir / delete | ✅ ready |
+| 08 | [egress](guides/08-egress) | `set_egress_default("Deny")` + host allow rules | ✅ ready |
+| 09 | [secrets](guides/09-secrets) | upsert / peek / list / delete (group-scoped) | ✅ ready |
+| 10 | [managed-identity](guides/10-managed-identity) | SystemAssigned / UserAssigned identity on group | ✅ ready |
+| 11 | [labels](guides/11-labels) | `labels=` on create + `list_sandboxes(labels=…)` | ✅ ready |
+| 12 | [interactive-shell](guides/12-interactive-shell) | `aca sandbox shell` — interactive PTY session (CLI only) | ✅ ready |
+| 13 | [cli-reference](guides/13-cli-reference) | `aca` CLI reference — install, auth, help, config, doctor, YAML, selectors, output, verbose | ✅ ready |
+| 14 | [sdk-reference](guides/14-sdk-reference) | Python SDK reference — install, clients, async, logging, exceptions, helpers, pollers | ✅ ready |
 
 ### Scenarios — composed use cases (with production tips)
 
-| Scenario | Composes | Status |
-|---|---|---|
-| [web-app-deployment](scenarios/web-app-deployment) | files + ports + exec | ✅ ready |
-| [agent-swarm](scenarios/agent-swarm) | aio SDK + orchestrator → mapper/reducer roles | ✅ ready |
-| [parallel-fan-out](scenarios/parallel-fan-out) | aio SDK + `asyncio.gather` over N sandboxes | ✅ ready |
-| data-pipeline | volumes + 2 sandboxes producer/consumer | Phase 3 |
-| checkpoint-rollback | snapshot before risky op → restore on failure | Phase 3 |
-| golden-image-workflow | custom disk → boot → configure → commit → reuse | Phase 3 |
-| ai-coding-agent | secrets + egress + custom disk + commit | Phase 3 |
-| claude-code-in-sandbox | run Claude Code CLI per task in fresh sandbox | Phase 3 |
-| codex-in-sandbox | run OpenAI Codex CLI per task in fresh sandbox | Phase 3 |
-| copilot-cli-in-sandbox | run GitHub Copilot CLI per task in fresh sandbox | Phase 3 |
-| langchain-tool-runtime | sandbox as a LangChain `BashTool` backend | Phase 3 |
-| autogen-code-executor | sandbox as an AutoGen `CodeExecutor` | Phase 3 |
+| # | Scenario | What it will show | Status |
+|---|---|---|---|
+| 01 | [webapps](scenarios/01-webapps) | Run web apps inside sandboxes (server + public port + client) | 📝 planned |
+| 02 | [coding-agents](scenarios/02-coding-agents) | Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox | 📝 planned |
+| 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
+| 04 | [swarms](scenarios/04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers | 📝 planned |
+| 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
+| 06 | [developer-workflows](scenarios/06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
+| 07 | [computer-use](scenarios/07-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |
 
 ## Reference
 

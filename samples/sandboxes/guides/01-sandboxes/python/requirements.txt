@@ -1,1 +1,2 @@
 -r ../../../../requirements.txt
+aiohttp>=3.9

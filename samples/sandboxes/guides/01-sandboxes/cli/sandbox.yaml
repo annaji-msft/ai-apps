@@ -1,0 +1,20 @@
+# Example sandbox spec consumed by run.sh via:
+#   aca sandbox apply --file sandbox.yaml
+#
+# Everything in this file maps 1:1 to a `begin_create_sandbox` call.
+# Keep flags out of CI scripts and check this file in next to your repo.
+
+disk: ubuntu
+resources:
+  cpu: 2000m
+  memory: 4096Mi
+environment:
+  GREETING: hello from yaml sandbox
+labels:
+  sample: 01-sandboxes
+  tier: yaml
+lifecycle:
+  autoSuspendPolicy:
+    enabled: true
+    interval: 600
+    mode: Memory

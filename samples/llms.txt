@@ -19,53 +19,60 @@ that uses these samples.
 - [00-sandbox-groups](sandboxes/guides/00-sandbox-groups/README.md):
   Create a sandbox group (ARM), assign the data-owner role, run a sandbox, delete the group. Python + CLI.
 - [01-sandboxes](sandboxes/guides/01-sandboxes/README.md):
-  Create a sandbox, run a shell command, delete the sandbox. Python + CLI.
-- [02-files](sandboxes/guides/02-files/README.md):
-  `write_file` / `read_file` / `stat_file` / `list_files` / `mkdir` / `delete_file`. Python + CLI.
-- [03-ports](sandboxes/guides/03-ports/README.md):
-  `add_port(anonymous=True)`, fetch the public URL, `remove_port`. Python + CLI.
-- [04-snapshots](sandboxes/guides/04-snapshots/README.md):
+  Create a sandbox, run a shell command, delete it. Basic + advanced (sync)
+  plus parallel boot of 3 via `azure.containerapps.sandbox.aio` +
+  `asyncio.gather` (Python). CLI variant adds `aca sandbox apply --file
+  sandbox.yaml` so the same advanced create is also expressed as a
+  checked-in spec file.
+- [02-snapshots](sandboxes/guides/02-snapshots/README.md):
   `create_snapshot`, boot a new sandbox from the snapshot, verify state preserved. Python + CLI.
-- [05-egress](sandboxes/guides/05-egress/README.md):
-  `set_egress_default("Deny")` + `add_egress_host_rule` to lock down outbound network. Python + CLI.
-- [06-secrets](sandboxes/guides/06-secrets/README.md):
-  Group-scoped secrets — `upsert_secret` / `list_secrets` / `peek_secret` / `delete_secret`. Python + CLI.
-- [07-volumes](sandboxes/guides/07-volumes/README.md):
-  Shared AzureBlob volumes — producer writes, consumer reads, via `add_volume_mount`. Python + CLI.
-- [08-labels](sandboxes/guides/08-labels/README.md):
-  `labels=` on `begin_create_sandbox` + `list_sandboxes(labels=…)` to query by tenant/role. Python + CLI.
-- [09-lifecycle](sandboxes/guides/09-lifecycle/README.md):
-  `stop` / `resume` / `wait_for_running` / `ensure_running` + `AutoSuspendPolicy` + `AutoDeletePolicy`. Python + CLI.
-- [10-disks](sandboxes/guides/10-disks/README.md):
+- [03-disks](sandboxes/guides/03-disks/README.md):
   Build a disk image from a public OCI image **and** commit a running
   sandbox to a disk image — both flows in one guide. Python + CLI.
-- [11-async](sandboxes/guides/11-async/README.md):
-  `azure.containerapps.sandbox.aio` + `asyncio.gather` for concurrent operations. Python only.
-- [12-managed-identity](sandboxes/guides/12-managed-identity/README.md):
+- [04-volumes](sandboxes/guides/04-volumes/README.md):
+  Shared AzureBlob volumes — producer writes, consumer reads, via `add_volume_mount`. Python + CLI.
+- [05-lifecycle](sandboxes/guides/05-lifecycle/README.md):
+  `stop` / `resume` / `wait_for_running` / `ensure_running` + `AutoSuspendPolicy` + `AutoDeletePolicy`. Python + CLI.
+- [06-ports](sandboxes/guides/06-ports/README.md):
+  `add_port(anonymous=True)`, fetch the public URL, `remove_port`. Python + CLI.
+- [07-files](sandboxes/guides/07-files/README.md):
+  `write_file` / `read_file` / `stat_file` / `list_files` / `mkdir` / `delete_file`. Python + CLI.
+- [08-egress](sandboxes/guides/08-egress/README.md):
+  `set_egress_default("Deny")` + `add_egress_host_rule` to lock down outbound network. Python + CLI.
+- [09-secrets](sandboxes/guides/09-secrets/README.md):
+  Group-scoped secrets — `upsert_secret` / `list_secrets` / `peek_secret` / `delete_secret`. Python + CLI.
+- [10-managed-identity](sandboxes/guides/10-managed-identity/README.md):
   SystemAssigned identity on a sandbox group — foundation for agent inception. Python + CLI.
-- [13-interactive-shell](sandboxes/guides/13-interactive-shell/README.md):
+- [11-labels](sandboxes/guides/11-labels/README.md):
+  `labels=` on `begin_create_sandbox` + `list_sandboxes(labels=…)` to query by tenant/role. Python + CLI.
+- [12-interactive-shell](sandboxes/guides/12-interactive-shell/README.md):
   `aca sandbox shell` — interactive PTY session into a running sandbox. CLI only.
-- [14-cli-reference](sandboxes/guides/14-cli-reference/README.md):
+- [13-cli-reference](sandboxes/guides/13-cli-reference/README.md):
   `aca` CLI reference — installation, auth, help, global flags & short forms,
   env vars, config (`~/.aca/config.json`), `doctor`, YAML spec workflow,
   selectors, output formats, verbose/debug.
-- [15-sdk-reference](sandboxes/guides/15-sdk-reference/README.md):
+- [14-sdk-reference](sandboxes/guides/14-sdk-reference/README.md):
   Python SDK reference — installation, the three clients, `aio` namespace,
   logging, exceptions, helpers (`wait_for_running` / `ensure_running`,
   region helpers, constants), pollers (sync vs `begin_*`, polling kwargs,
   parallel fan-out).
 
-## Sandboxes — scenarios (composed use cases)
+## Sandboxes — scenarios (composed use cases — placeholders, coming soon)
 
-- [web-app-deployment](sandboxes/scenarios/web-app-deployment/README.md):
-  Upload a Node.js HTTP server, start it, expose port 8080 publicly,
-  fetch from your laptop. Composes files + exec + ports. Python + CLI.
-- [parallel-fan-out](sandboxes/scenarios/parallel-fan-out/README.md):
-  Run the same task on N sandboxes concurrently via the async SDK +
-  `asyncio.gather`. Python only.
-- [agent-swarm](sandboxes/scenarios/agent-swarm/README.md):
-  Orchestrator dispatches mapper + reducer roles across a swarm of
-  sandboxes (MapReduce-shaped). Python only.
+- [01-webapps](sandboxes/scenarios/01-webapps/README.md):
+  Run web apps inside sandboxes — server + public port + client.
+- [02-coding-agents](sandboxes/scenarios/02-coding-agents/README.md):
+  Run a coding agent (Claude Code / Codex / Copilot CLI) per task in a fresh sandbox.
+- [03-code-interpreter](sandboxes/scenarios/03-code-interpreter/README.md):
+  LLM-driven code execution — generate, run, observe, iterate.
+- [04-swarms](sandboxes/scenarios/04-swarms/README.md):
+  Many sandboxes, one orchestrator — fan-out work across N workers.
+- [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
+  Producer/consumer pipelines on shared AzureBlob volumes.
+- [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
+  PR builds, ephemeral CI, on-demand dev environments.
+- [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
+  Browser/desktop automation inside a sandbox for agentic UI tasks.
 
 ## Apps
 
