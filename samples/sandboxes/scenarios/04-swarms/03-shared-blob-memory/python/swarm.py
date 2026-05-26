@@ -1,26 +1,35 @@
-"""Swarm with shared-blob memory — MI inception + a durable scratchpad.
+"""Swarm with shared-blob memory — basic inception + a sandbox-group AzureBlob volume.
 
-Same orchestrator-spawns-workers shape as
-``../../01-mi-inception/python/swarm.py``, plus an Azure Blob
-container that every sandbox in the swarm reads and writes through
-its managed identity:
+Same cross-group inception shape as
+``../../01-basic-inception/python/swarm.py``: a host script provisions
+two fresh sandbox groups (orchestrator with SystemAssigned MI, worker
+group with ``Data Owner`` granted to the orchestrator's MI), boots an
+orchestrator sandbox, then asks it to fan out N=4 Monte Carlo Pi
+workers in the worker group **using only managed identity**.
 
-  1. Host provisions:
-       * orchestrator sandbox group (SystemAssigned MI)
-       * worker       sandbox group (SystemAssigned MI)
-       * storage account + container "shared-memory"
-  2. Host grants:
-       * orchestrator MI ← Container Apps SandboxGroup Data Owner on worker group
-       * orchestrator MI ← Storage Blob Data Contributor on the container
-       * worker        MI ← Storage Blob Data Contributor on the container
-  3. Orchestrator sandbox boots, gets the SDK + the inner script.
-  4. Orchestrator fans out N workers in the worker group via MI.
-  5. Each worker writes per-checkpoint progress JSON to the container.
-  6. Orchestrator never reads worker stdout; it learns the swarm
-     state by listing + downloading blobs.
+The new piece: the worker group owns a single ``AzureBlob`` volume
+called ``shared-memory``. Every worker mounts it at ``/mnt/shared``
+and writes its per-checkpoint state to
+``/mnt/shared/{run_id}/worker-{i}.json`` with a plain ``open()``.
+After the workers exit (and their sandboxes are deleted), the
+orchestrator spawns one final **aggregator sandbox** in the same
+worker group, mounts the same volume read-only, lists the prefix,
+reads every blob, and prints a single ``RESULT={json}`` line. This
+demonstrates three things that are otherwise hard to show:
 
-Reads configuration from ``samples/.env`` (written by the baseline
-setup in ``samples/sandboxes/setup``).
+1. **Durable shared scratchpad** — the volume survives the workers
+   that wrote to it.
+2. **Cross-worker visibility without RPC** — siblings see each
+   other's partial state by listing a prefix.
+3. **Zero blob plumbing** — no storage account, no
+   ``azure-storage-blob`` in the agent code, no RBAC on storage,
+   no SAS / connection strings. Just ``open()``.
+
+The full scenario story (architecture diagram + production tips)
+lives in ``../README.md``.
+
+Reads configuration from ``samples/.env`` (written by
+``samples/sandboxes/setup/python/setup.py``).
 """
 
 from __future__ import annotations
@@ -37,35 +46,35 @@ from pathlib import Path
 from azure.core.exceptions import HttpResponseError
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.authorization import AuthorizationManagementClient
-from azure.mgmt.storage import StorageManagementClient
-from azure.storage.blob import BlobServiceClient
 from azure.containerapps.sandbox import (
     SandboxGroupClient,
     SandboxGroupManagementClient,
+    SandboxVolume,
     endpoint_for_region,
 )
 
+ROLE_NAME = "Container Apps SandboxGroup Data Owner"
 SDK_WHEEL_URL = (
     "https://github.com/microsoft/azure-container-apps/releases/download/"
     "python-sdk-v0.1.0b1-early-access/"
     "azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl"
 )
 ORCH_DISK = "python-3.14"
+WORKER_DISK = "python-3.14"
 WORKERS = 4
 DARTS_PER_WORKER = 1_000_000
 CHECKPOINT_EVERY = 200_000
-CONTAINER_NAME = "shared-memory"
-SANDBOX_DATA_OWNER = "Container Apps SandboxGroup Data Owner"
-BLOB_DATA_CONTRIBUTOR = "Storage Blob Data Contributor"
-RBAC_PROPAGATION_SECONDS = 90  # blob data-plane RBAC needs longer than ARM control-plane
+VOLUME_NAME = "shared-memory"
+MOUNTPOINT = "/mnt/shared"
+RBAC_PROPAGATION_SECONDS = 20
 
 
 # ---------------------------------------------------------------------------
-# Runs INSIDE the orchestrator sandbox. Auths to the worker sandbox group
-# AND to blob via ManagedIdentityCredential; fans out N workers; in each
-# worker, computes Pi in batches, writing per-checkpoint state to the
-# shared container; then lists/reads the result blobs and prints a single
-# RESULT={json} line for the host.
+# Runs INSIDE the orchestrator sandbox. Uses ManagedIdentityCredential (the
+# orchestrator group's MI) to (a) fan out N workers in the worker group, each
+# mounted on the shared volume, and (b) launch a final aggregator sandbox
+# that reads the workers' checkpoint files from the shared volume after the
+# workers themselves are gone.
 # ---------------------------------------------------------------------------
 SPAWN_WORKERS_SCRIPT = textwrap.dedent('''\
     from __future__ import annotations
@@ -76,107 +85,120 @@ SPAWN_WORKERS_SCRIPT = textwrap.dedent('''\
     import textwrap
 
     from azure.identity.aio import ManagedIdentityCredential
-    from azure.storage.blob.aio import BlobServiceClient
     from azure.containerapps.sandbox.aio import SandboxGroupClient
-    from azure.containerapps.sandbox import endpoint_for_region
+    from azure.containerapps.sandbox import SandboxVolume, endpoint_for_region
 
-    SUBSCRIPTION   = os.environ["AZURE_SUBSCRIPTION_ID"]
-    RG             = os.environ["ACA_RESOURCE_GROUP"]
-    WORKER_GROUP   = os.environ["WORKER_SANDBOX_GROUP"]
-    REGION         = os.environ["ACA_SANDBOXGROUP_REGION"]
-    STORAGE_ACCT   = os.environ["STORAGE_ACCOUNT"]
-    CONTAINER      = os.environ["CONTAINER_NAME"]
-    RUN_ID         = os.environ["RUN_ID"]
-    WORKERS        = int(os.environ["WORKERS"])
-    DARTS          = int(os.environ["DARTS_PER_WORKER"])
-    CHECKPOINT     = int(os.environ["CHECKPOINT_EVERY"])
+    SUBSCRIPTION = os.environ["AZURE_SUBSCRIPTION_ID"]
+    RG           = os.environ["ACA_RESOURCE_GROUP"]
+    WORKER_GROUP = os.environ["WORKER_SANDBOX_GROUP"]
+    REGION       = os.environ["ACA_SANDBOXGROUP_REGION"]
+    VOLUME       = os.environ["VOLUME_NAME"]
+    MOUNT        = os.environ["MOUNTPOINT"]
+    RUN_ID       = os.environ["RUN_ID"]
+    WORKERS      = int(os.environ["WORKERS"])
+    DARTS        = int(os.environ["DARTS_PER_WORKER"])
+    CHECKPOINT   = int(os.environ["CHECKPOINT_EVERY"])
 
-    # Tiny Pi worker that streams a checkpoint blob every CHECKPOINT darts.
-    # The whole script is run from the worker sandbox via `python3 -c` and
-    # uses ManagedIdentityCredential — same MI the orchestrator used to
-    # spawn the worker, but here scoped to one container only.
+    # Per-worker script — runs inside the worker sandbox. Uses plain
+    # `open()` against the mounted shared volume — no blob SDK, no auth.
     WORKER_PY = textwrap.dedent("""\\
-        import asyncio, json, os, random, sys
-        from azure.identity.aio import ManagedIdentityCredential
-        from azure.storage.blob.aio import BlobServiceClient
+        import json, os, random, sys
 
-        async def main():
-            i          = int(sys.argv[1])
-            total      = int(sys.argv[2])
-            checkpoint = int(sys.argv[3])
-            account    = os.environ["STORAGE_ACCOUNT"]
-            container  = os.environ["CONTAINER_NAME"]
-            run_id     = os.environ["RUN_ID"]
-            blob_name  = f"{run_id}/worker-{i}.json"
+        i          = int(sys.argv[1])
+        total      = int(sys.argv[2])
+        checkpoint = int(sys.argv[3])
+        mount      = os.environ["MOUNTPOINT"]
+        run_id     = os.environ["RUN_ID"]
 
-            cred = ManagedIdentityCredential()
-            svc = BlobServiceClient(f"https://{account}.blob.core.windows.net", credential=cred)
-            c = svc.get_container_client(container)
+        run_dir = os.path.join(mount, run_id)
+        os.makedirs(run_dir, exist_ok=True)
+        path = os.path.join(run_dir, f"worker-{i}.json")
 
-            inside = 0
-            checkpoints = []
-            try:
-                for k in range(1, total + 1):
-                    x = random.random(); y = random.random()
-                    if x*x + y*y < 1.0:
-                        inside += 1
-                    if k % checkpoint == 0:
-                        checkpoints.append(k)
-                        await c.upload_blob(
-                            blob_name,
-                            json.dumps({
-                                "worker": i,
-                                "inside": inside,
-                                "total":  k,
-                                "checkpoints": checkpoints,
-                                "done":   k == total,
-                            }).encode(),
-                            overwrite=True,
-                        )
-                print(f"DONE worker={i} inside={inside} total={total} ckpts={len(checkpoints)}")
-            finally:
-                await svc.close()
-                await cred.close()
+        inside = 0
+        checkpoints = []
+        for k in range(1, total + 1):
+            x = random.random(); y = random.random()
+            if x*x + y*y < 1.0:
+                inside += 1
+            if k % checkpoint == 0:
+                checkpoints.append(k)
+                tmp = path + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump({
+                        "worker": i,
+                        "inside": inside,
+                        "total":  k,
+                        "checkpoints": checkpoints,
+                        "done":   k == total,
+                    }, f)
+                os.replace(tmp, path)
 
-        asyncio.run(main())
+        print(f"DONE worker={i} inside={inside} total={total} ckpts={len(checkpoints)}")
+    """).strip()
+
+    # Aggregator script — runs inside the final aggregator sandbox AFTER
+    # the workers are deleted. Just lists the shared prefix and reads.
+    AGGREGATOR_PY = textwrap.dedent("""\\
+        import glob, json, os
+
+        run_dir = os.path.join(os.environ["MOUNTPOINT"], os.environ["RUN_ID"])
+        results = []
+        for path in sorted(glob.glob(os.path.join(run_dir, "worker-*.json"))):
+            with open(path) as f:
+                results.append(json.load(f))
+        results.sort(key=lambda r: r["worker"])
+        print("AGGREGATED_FILES=" + str(len(results)))
+        print("RESULT=" + json.dumps(results))
     """).strip()
 
 
     async def run_worker(client: SandboxGroupClient, i: int) -> str:
         poller = await client.begin_create_sandbox(
-            disk="python-3.14",
+            disk=os.environ["WORKER_DISK"],
             labels={"swarm": "shared-blob-memory", "worker": str(i)},
+            volumes=[SandboxVolume(volume_name=VOLUME, mountpoint=MOUNT)],
         )
         sandbox = await poller.result()
         try:
-            # Install azure-identity + azure-storage-blob inside the worker.
-            inst = await sandbox.exec(
-                "pip install --quiet --break-system-packages "
-                "azure-identity azure-storage-blob aiohttp"
-            )
-            if inst.exit_code != 0:
-                return f"FAIL worker={i} install_exit={inst.exit_code} stderr={inst.stderr[:400]}"
-
             await sandbox.write_file("/tmp/worker.py", WORKER_PY.encode())
-
-            env_prefix = (
-                f'STORAGE_ACCOUNT={STORAGE_ACCT} '
-                f'CONTAINER_NAME={CONTAINER} '
-                f'RUN_ID={RUN_ID}'
-            )
             result = await sandbox.exec(
-                f"{env_prefix} python3 /tmp/worker.py {i} {DARTS} {CHECKPOINT}"
+                f"MOUNTPOINT={MOUNT} RUN_ID={RUN_ID} "
+                f"python3 /tmp/worker.py {i} {DARTS} {CHECKPOINT}"
             )
             if result.exit_code != 0:
                 return f"FAIL worker={i} exit={result.exit_code} stderr={result.stderr[:400]}"
             return (result.stdout or "").strip().splitlines()[-1]
+        finally:
+            # Worker sandbox is gone — but its scratchpad blob stays in the
+            # shared volume. That's the whole point of this variant.
+            await sandbox.delete()
+
+
+    async def run_aggregator(client: SandboxGroupClient) -> str:
+        """Spawn a tiny sandbox in the worker group, mount the same volume,
+        list the workers' checkpoint files, and emit RESULT=."""
+        poller = await client.begin_create_sandbox(
+            disk=os.environ["WORKER_DISK"],
+            labels={"swarm": "shared-blob-memory", "role": "aggregator"},
+            volumes=[SandboxVolume(volume_name=VOLUME, mountpoint=MOUNT)],
+        )
+        sandbox = await poller.result()
+        try:
+            await sandbox.write_file("/tmp/aggregate.py", AGGREGATOR_PY.encode())
+            result = await sandbox.exec(
+                f"MOUNTPOINT={MOUNT} RUN_ID={RUN_ID} python3 /tmp/aggregate.py"
+            )
+            if result.exit_code != 0:
+                raise RuntimeError(
+                    f"aggregator exit={result.exit_code} stderr={result.stderr[:400]}"
+                )
+            return result.stdout or ""
         finally:
             await sandbox.delete()
 
 
     async def main():
         cred = ManagedIdentityCredential()
-        # 1. Spawn workers via MI in the worker group.
         sb_client = SandboxGroupClient(
             endpoint_for_region(REGION),
             cred,
@@ -185,27 +207,20 @@ SPAWN_WORKERS_SCRIPT = textwrap.dedent('''\
             sandbox_group=WORKER_GROUP,
         )
         try:
+            # 1. Fan out N workers; each writes its checkpoints into the
+            #    shared volume, then its sandbox is deleted.
             lines = await asyncio.gather(*(run_worker(sb_client, i) for i in range(WORKERS)))
             for line in lines:
                 print(line)
+
+            # 2. With every worker now gone, an aggregator sandbox reads
+            #    the durable scratchpad they left behind.
+            agg_out = await run_aggregator(sb_client)
+            # Re-emit aggregator stdout so the host sees AGGREGATED_FILES= + RESULT=.
+            for line in agg_out.splitlines():
+                print(line)
         finally:
             await sb_client.close()
-
-        # 2. Aggregate by reading every result blob from the shared container.
-        blob = BlobServiceClient(
-            f"https://{STORAGE_ACCT}.blob.core.windows.net",
-            credential=cred,
-        )
-        try:
-            c = blob.get_container_client(CONTAINER)
-            results = []
-            async for b in c.list_blobs(name_starts_with=f"{RUN_ID}/"):
-                stream = await c.download_blob(b.name)
-                results.append(json.loads(await stream.readall()))
-            results.sort(key=lambda r: r["worker"])
-            print("RESULT=" + json.dumps(results))
-        finally:
-            await blob.close()
             await cred.close()
 
 
@@ -230,30 +245,23 @@ def _load_env() -> None:
         )
 
 
-def _assign_role(
-    auth: AuthorizationManagementClient,
-    scope: str,
-    principal_id: str,
-    role_name: str,
-    principal_type: str = "ServicePrincipal",
-) -> None:
+def _assign_role(auth: AuthorizationManagementClient, scope: str, principal_id: str) -> None:
     role_def = next(
-        auth.role_definitions.list(scope, filter=f"roleName eq '{role_name}'"),
+        auth.role_definitions.list(scope, filter=f"roleName eq '{ROLE_NAME}'"),
         None,
     )
     if role_def is None:
-        sys.exit(f"error: role '{role_name}' not found at scope {scope}")
-    # AAD replication for a brand-new MI principal can take 10-30s; retry.
+        sys.exit(f"error: role '{ROLE_NAME}' not found at scope {scope}")
+    # AAD replication for a brand-new MI principal can take 10-30s.
     last_exc: Exception | None = None
-    for attempt in range(10):
+    for _ in range(10):
         try:
             auth.role_assignments.create(
-                scope,
-                str(uuid.uuid4()),
+                scope, str(uuid.uuid4()),
                 {
                     "role_definition_id": role_def.id,
                     "principal_id": principal_id,
-                    "principal_type": principal_type,
+                    "principal_type": "ServicePrincipal",
                 },
             )
             return
@@ -266,120 +274,76 @@ def _assign_role(
                 time.sleep(5)
                 continue
             raise
-    raise RuntimeError(f"role grant '{role_name}' never succeeded: {last_exc}")
+    raise RuntimeError(f"role grant never succeeded: {last_exc}")
 
 
 def _wait_for_principal(mgmt: SandboxGroupManagementClient, group: str) -> str:
-    """SystemAssigned principalId may not appear immediately after create."""
     for _ in range(10):
         identity = mgmt.get_group(group).identity or {}
         pid = identity.get("principalId")
         if pid:
             return pid
         time.sleep(2)
-    sys.exit(f"error: sandbox group '{group}' has no principalId after create")
+    sys.exit(f"error: group {group!r} has no principalId — MI not enabled?")
 
 
 def main() -> None:
     _load_env()
-    subscription   = os.environ["AZURE_SUBSCRIPTION_ID"]
+    subscription = os.environ["AZURE_SUBSCRIPTION_ID"]
     resource_group = os.environ["ACA_RESOURCE_GROUP"]
-    region         = os.environ["ACA_SANDBOXGROUP_REGION"]
+    region = os.environ["ACA_SANDBOXGROUP_REGION"]
 
-    suffix       = uuid.uuid4().hex[:8]
-    run_id       = uuid.uuid4().hex[:12]
-    orch_group   = f"swarmblob-orch-{suffix}"
+    suffix = uuid.uuid4().hex[:8]
+    orch_group = f"swarmblob-orch-{suffix}"
     worker_group = f"swarmblob-workers-{suffix}"
-    # Storage account names: 3-24 lowercase alphanumeric.
-    storage_name = f"swarmblob{suffix}"[:24]
+    run_id = uuid.uuid4().hex[:12]
 
     cred = DefaultAzureCredential()
-    sb_mgmt   = SandboxGroupManagementClient(
+    mgmt = SandboxGroupManagementClient(
         cred, subscription_id=subscription, resource_group=resource_group,
     )
-    st_mgmt   = StorageManagementClient(cred, subscription)
-    auth      = AuthorizationManagementClient(cred, subscription)
+    auth = AuthorizationManagementClient(cred, subscription)
 
     orch_client: SandboxGroupClient | None = None
+    worker_client: SandboxGroupClient | None = None
     orchestrator = None
-    storage_created = False
+    volume_created = False
+
     try:
-        # ---- 1. Sandbox groups (both with SystemAssigned MI) ---------------
+        # ---- 1. Two sandbox groups ----------------------------------------
         print(f"==> Provisioning orchestrator group {orch_group!r} (SystemAssigned MI)...")
-        sb_mgmt.begin_create_group(
+        mgmt.begin_create_group(
             orch_group, region, identity={"type": "SystemAssigned"},
         ).result()
-        orch_pid = _wait_for_principal(sb_mgmt, orch_group)
+        orch_pid = _wait_for_principal(mgmt, orch_group)
         print(f"    orchestrator MI principalId: {orch_pid}")
 
-        print(f"==> Provisioning worker group {worker_group!r} (SystemAssigned MI)...")
-        sb_mgmt.begin_create_group(
-            worker_group, region, identity={"type": "SystemAssigned"},
-        ).result()
-        worker_pid = _wait_for_principal(sb_mgmt, worker_group)
-        print(f"    worker MI principalId:       {worker_pid}")
+        print(f"==> Provisioning worker group {worker_group!r}...")
+        mgmt.begin_create_group(worker_group, region).result()
 
-        # ---- 2. Storage account + container --------------------------------
-        print(f"==> Provisioning storage account {storage_name!r}...")
-        st_mgmt.storage_accounts.begin_create(
-            resource_group,
-            storage_name,
-            {
-                "sku": {"name": "Standard_LRS"},
-                "kind": "StorageV2",
-                "location": region,
-                "properties": {
-                    "allowBlobPublicAccess": False,
-                    "publicNetworkAccess": "Enabled",
-                    "minimumTlsVersion": "TLS1_2",
-                    "allowSharedKeyAccess": False,
-                    "defaultToOAuthAuthentication": True,
-                },
-            },
-        ).result()
-        storage_created = True
-
-        print(f"==> Provisioning container {CONTAINER_NAME!r}...")
-        st_mgmt.blob_containers.create(
-            resource_group, storage_name, CONTAINER_NAME, {},
-        )
-
-        # ---- 3. Role grants ------------------------------------------------
+        # ---- 2. Grant Data Owner on worker group → orchestrator MI --------
         worker_group_scope = (
             f"/subscriptions/{subscription}/resourceGroups/{resource_group}"
             f"/providers/Microsoft.App/sandboxGroups/{worker_group}"
         )
-        container_scope = (
-            f"/subscriptions/{subscription}/resourceGroups/{resource_group}"
-            f"/providers/Microsoft.Storage/storageAccounts/{storage_name}"
-            f"/blobServices/default/containers/{CONTAINER_NAME}"
-        )
-
-        print(f"==> Granting {SANDBOX_DATA_OWNER!r} on worker group → orch MI...")
-        _assign_role(auth, worker_group_scope, orch_pid, SANDBOX_DATA_OWNER)
-
-        print(f"==> Granting {BLOB_DATA_CONTRIBUTOR!r} on container → orch MI + worker MI + host user...")
-        _assign_role(auth, container_scope, orch_pid,   BLOB_DATA_CONTRIBUTOR)
-        _assign_role(auth, container_scope, worker_pid, BLOB_DATA_CONTRIBUTOR)
-        host_user_oid = os.environ.get("HOST_USER_OBJECT_ID")
-        if not host_user_oid:
-            try:
-                import subprocess
-                host_user_oid = subprocess.check_output(
-                    ["az", "ad", "signed-in-user", "show", "--query", "id", "-o", "tsv"],
-                    text=True, stderr=subprocess.DEVNULL,
-                ).strip()
-            except Exception:
-                host_user_oid = None
-        if host_user_oid:
-            _assign_role(auth, container_scope, host_user_oid, BLOB_DATA_CONTRIBUTOR, principal_type="User")
-        else:
-            print("    (skipped host-user grant; set HOST_USER_OBJECT_ID or `az login` to enable cross-check)")
-
+        print(f"==> Granting {ROLE_NAME!r} on worker group → orchestrator MI...")
+        _assign_role(auth, worker_group_scope, orch_pid)
         print(f"==> Waiting {RBAC_PROPAGATION_SECONDS}s for RBAC propagation...")
         time.sleep(RBAC_PROPAGATION_SECONDS)
 
-        # ---- 4. Orchestrator sandbox + bootstrap ---------------------------
+        # ---- 3. Shared AzureBlob volume in the worker group ---------------
+        print(f"==> Creating AzureBlob volume {VOLUME_NAME!r} in worker group...")
+        worker_client = SandboxGroupClient(
+            endpoint_for_region(region), cred,
+            subscription_id=subscription,
+            resource_group=resource_group,
+            sandbox_group=worker_group,
+        )
+        vol = worker_client.create_volume(VOLUME_NAME, type="AzureBlob")
+        volume_created = True
+        print(f"    volume: name={vol.name} type={vol.type}")
+
+        # ---- 4. Orchestrator sandbox + bootstrap --------------------------
         print(f"==> Creating orchestrator sandbox (disk={ORCH_DISK!r}) in {orch_group!r}...")
         orch_client = SandboxGroupClient(
             endpoint_for_region(region), cred,
@@ -400,10 +364,10 @@ def main() -> None:
         orchestrator.write_file(f"/tmp/{wheel_name}", wheel_bytes)
         orchestrator.write_file("/tmp/spawn_workers.py", SPAWN_WORKERS_SCRIPT.encode())
 
-        print("==> Installing SDK + blob deps inside orchestrator...")
+        print("==> Installing SDK inside orchestrator...")
         install = orchestrator.exec(
             "pip install --quiet --break-system-packages "
-            f"/tmp/{wheel_name} azure-identity azure-storage-blob aiohttp"
+            f"/tmp/{wheel_name} azure-identity aiohttp"
         )
         if install.exit_code != 0:
             sys.exit(f"orchestrator pip install failed:\n{install.stderr}")
@@ -415,8 +379,9 @@ def main() -> None:
             f"ACA_RESOURCE_GROUP={resource_group} "
             f"WORKER_SANDBOX_GROUP={worker_group} "
             f"ACA_SANDBOXGROUP_REGION={region} "
-            f"STORAGE_ACCOUNT={storage_name} "
-            f"CONTAINER_NAME={CONTAINER_NAME} "
+            f"WORKER_DISK={WORKER_DISK} "
+            f"VOLUME_NAME={VOLUME_NAME} "
+            f"MOUNTPOINT={MOUNTPOINT} "
             f"RUN_ID={run_id} "
             f"WORKERS={WORKERS} "
             f"DARTS_PER_WORKER={DARTS_PER_WORKER} "
@@ -429,8 +394,9 @@ def main() -> None:
                 f"stdout: {run.stdout}\nstderr: {run.stderr}"
             )
 
-        # ---- 6. Aggregate (host reads worker DONE lines + the blob payload)
+        # ---- 6. Parse worker DONE lines + aggregator RESULT ---------------
         payload = None
+        aggregated_files = None
         for line in (run.stdout or "").splitlines():
             if line.startswith("DONE "):
                 tokens = dict(t.split("=") for t in line.split()[1:] if "=" in t)
@@ -440,27 +406,20 @@ def main() -> None:
                     f"{int(tokens.get('inside', 0)):,} / "
                     f"{int(tokens.get('total', 0)):,} inside"
                 )
+            elif line.startswith("AGGREGATED_FILES="):
+                aggregated_files = int(line.split("=", 1)[1])
             elif line.startswith("RESULT="):
                 payload = json.loads(line[len("RESULT="):])
         if payload is None:
             sys.exit(f"no RESULT= line in orchestrator stdout:\n{run.stdout}")
+        if aggregated_files != WORKERS:
+            sys.exit(
+                f"aggregator saw {aggregated_files} files but expected {WORKERS}\n"
+                f"orchestrator stdout:\n{run.stdout}"
+            )
 
-        print(f"==> Reading {len(payload)} result blobs from shared container (host-side cross-check)...")
-        host_blob = BlobServiceClient(
-            f"https://{storage_name}.blob.core.windows.net", credential=cred,
-        )
-        host_results = []
-        try:
-            c = host_blob.get_container_client(CONTAINER_NAME)
-            for b in c.list_blobs(name_starts_with=f"{run_id}/"):
-                host_results.append(json.loads(c.download_blob(b.name).readall()))
-        finally:
-            host_blob.close()
-        host_results.sort(key=lambda r: r["worker"])
-        assert len(host_results) == WORKERS, (
-            f"host-side blob count {len(host_results)} != WORKERS {WORKERS}"
-        )
-
+        print(f"==> Aggregator sandbox read {aggregated_files} checkpoint files from "
+              f"{MOUNTPOINT}/{run_id}/ AFTER all workers were deleted.")
         total_inside = sum(r["inside"] for r in payload)
         total_darts  = sum(r["total"]  for r in payload)
         pi_est = 4.0 * total_inside / total_darts
@@ -469,27 +428,27 @@ def main() -> None:
         print(f"==> Aggregating across {total_darts:,} darts...")
         print(f"    π ≈ {pi_est:.6f}  (error {err:.2e})")
     finally:
-        print("==> Cleaning up orchestrator + storage + both groups...")
+        print("==> Cleaning up orchestrator + volume + both groups...")
         if orchestrator is not None:
             try:
                 orchestrator.delete()
             except Exception as exc:
-                print(f"    cleanup warning (orchestrator): {exc}")
+                print(f"    warn (orchestrator delete): {exc}")
         if orch_client is not None:
             orch_client.close()
+        if volume_created and worker_client is not None:
+            try:
+                worker_client.delete_volume(VOLUME_NAME)
+            except Exception as exc:
+                print(f"    warn (volume delete): {exc}")
+        if worker_client is not None:
+            worker_client.close()
         for grp in (orch_group, worker_group):
             try:
-                sb_mgmt.delete_group(grp)
+                mgmt.delete_group(grp)
             except Exception as exc:
-                print(f"    cleanup warning ({grp}): {exc}")
-        if storage_created:
-            try:
-                st_mgmt.storage_accounts.delete(resource_group, storage_name)
-            except Exception as exc:
-                print(f"    cleanup warning (storage {storage_name}): {exc}")
-        sb_mgmt.close()
-        st_mgmt.close()
-        auth.close()
+                print(f"    warn (group {grp} delete): {exc}")
+        mgmt.close()
         cred.close()
         print("==> Done.")
 

@@ -1,4 +1,4 @@
-# MI inception swarm — `aca` CLI variant
+# Basic inception swarm — `aca` CLI variant
 
 Same scenario as the Python variant, but the orchestration is bash +
 the `aca` CLI. The script is structured so that **`aca config`** is

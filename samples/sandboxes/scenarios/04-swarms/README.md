@@ -44,12 +44,12 @@ flowchart LR
 
 | # | Folder | Orchestrator | Dispatch | Status |
 |---|---|---|---|---|
-| 01 | [`01-mi-inception`](01-mi-inception) | Sandbox in Group A | In-process `asyncio.gather` / bash `&` over `aca --managed-identity sandbox create` | ✅ ready |
+| 01 | [`01-basic-inception`](01-basic-inception) | Sandbox in Group A | In-process `asyncio.gather` / bash `&` over `aca --managed-identity sandbox create` | ✅ ready |
 | 03 | [`03-shared-blob-memory`](03-shared-blob-memory) | Sandbox in Group A | Same MI fan-out as 01, **plus a shared Azure Blob container** workers use as durable scratchpad / shared agent memory | ✅ ready |
 
 ## When to pick which
 
-- **01-mi-inception** — self-contained agent swarms. The orchestrator
+- **01-basic-inception** — self-contained agent swarms. The orchestrator
   is itself a sandbox, the dispatch logic is just `asyncio.gather` (or
   bash `&`), and there's no extra infrastructure to operate. Best
   starting point and the right shape when the orchestrator is *itself*

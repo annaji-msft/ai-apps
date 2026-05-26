@@ -1,4 +1,4 @@
-"""MI inception swarm — orchestrator sandbox spawns N workers in another group.
+"""Basic inception swarm — orchestrator sandbox spawns N workers in another group.
 
 The host script provisions two fresh per-run sandbox groups (orchestrator
 with SystemAssigned managed identity, plus a worker group with `Data
@@ -83,7 +83,7 @@ SPAWN_WORKERS_SCRIPT = textwrap.dedent("""\
         t0 = time.perf_counter()
         poller = await client.begin_create_sandbox(
             disk=\"ubuntu\",
-            labels={\"swarm\": \"mi-inception\", \"worker\": str(i)},
+            labels={\"swarm\": \"basic-inception\", \"worker\": str(i)},
         )
         sandbox = await poller.result()
         exec_result = await sandbox.exec(PI_SNIPPET)
@@ -237,7 +237,7 @@ def main() -> None:
         )
         orchestrator = orch_client.begin_create_sandbox(
             disk=ORCH_DISK,
-            labels={"swarm": "mi-inception", "role": "orchestrator"},
+            labels={"swarm": "basic-inception", "role": "orchestrator"},
         ).result()
         print(f"    orchestrator: {orchestrator.sandbox_id}")
 

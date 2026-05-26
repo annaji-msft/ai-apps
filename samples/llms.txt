@@ -67,14 +67,14 @@ that uses these samples.
   LLM-driven code execution — generate, run, observe, iterate.
 - [04-swarms](sandboxes/scenarios/04-swarms/README.md):
   Orchestrator coordinating many sandbox workers. Variant
-  [`01-mi-inception`](sandboxes/scenarios/04-swarms/01-mi-inception/README.md)
+  [`01-basic-inception`](sandboxes/scenarios/04-swarms/01-basic-inception/README.md)
   ships (orchestrator sandbox spawns N workers in another group via its
   group's system-assigned MI; Monte Carlo Pi demo across `asyncio.gather`
   in Python and `aca --managed-identity` + bash `&` in CLI). Variant
   [`03-shared-blob-memory`](sandboxes/scenarios/04-swarms/03-shared-blob-memory/README.md)
-  ships (same MI inception plus an Azure Blob container as durable shared
-  scratchpad: workers stream JSON checkpoints, orchestrator aggregates by
-  listing the prefix, host cross-checks via its own MI).
+  ships (same inception shape plus a sandbox-group AzureBlob volume as
+  durable shared scratchpad: workers stream JSON checkpoints, an
+  aggregator sandbox lists the prefix after workers are gone).
 - [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
   Producer/consumer pipelines on shared AzureBlob volumes.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
