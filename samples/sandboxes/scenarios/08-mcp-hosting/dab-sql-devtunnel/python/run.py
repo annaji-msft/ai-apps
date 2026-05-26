@@ -367,7 +367,7 @@ def main() -> int:
             print("=" * 72)
             print()
             # Poll until `devtunnel user show` reports a logged-in user.
-            deadline = time.monotonic() + 300
+            deadline = time.monotonic() + 900
             while time.monotonic() < deadline:
                 r = sandbox.exec("devtunnel user show 2>&1")
                 if r.exit_code == 0 and "Not logged in" not in (r.stdout or ""):
@@ -375,7 +375,7 @@ def main() -> int:
                     break
                 time.sleep(3)
             else:
-                raise RuntimeError("devtunnel login did not complete within 5 minutes")
+                raise RuntimeError("devtunnel login did not complete within 15 minutes")
             print(f"    Logged in as: {(r.stdout or '').strip().splitlines()[0][:120]}")
         else:
             devtunnel_logged_in = True
