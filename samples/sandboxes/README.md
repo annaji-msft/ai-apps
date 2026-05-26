@@ -83,6 +83,7 @@ documentation and how to override defaults.
 | 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
 | 06 | [developer-workflows](scenarios/06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
 | 07 | [computer-use](scenarios/07-computer-use) | Browser/desktop automation inside a sandbox for agentic UI tasks | 📝 planned |
+| 08 | [mcp-hosting](scenarios/08-mcp-hosting) | Host MCP servers in a sandbox — `excalidraw-anonymous` (public via `add_port`) and `dab-sql-devtunnel` (DAB + Postgres + Chinook, exposed via Dev Tunnels with **no inbound port** on the sandbox) | ✅ Python ready · 📝 CLI planned |
 
 ## Reference
 

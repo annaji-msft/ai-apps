@@ -1,0 +1,138 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/latest/download/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "postgresql",
+    "connection-string": "Host=localhost;Port=5432;Database=chinook;Username=dab;Password=dab;"
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api"
+    },
+    "graphql": {
+      "enabled": true,
+      "path": "/graphql"
+    },
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp",
+      "dml-tools": {
+        "create-record": false,
+        "update-record": false,
+        "delete-record": false
+      },
+      "description": "Chinook music store database (read-only). Use the typed entity tools to answer questions about artists, albums, tracks, customers, invoices, and genres."
+    },
+    "host": {
+      "mode": "production",
+      "cors": {
+        "origins": ["*"],
+        "allow-credentials": false
+      },
+      "authentication": {
+        "provider": "Unauthenticated"
+      }
+    }
+  },
+  "entities": {
+    "Artist": {
+      "source": {
+        "object": "\"Artist\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "Album": {
+      "source": {
+        "object": "\"Album\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ],
+      "relationships": {
+        "artist": {
+          "cardinality": "one",
+          "target.entity": "Artist"
+        },
+        "tracks": {
+          "cardinality": "many",
+          "target.entity": "Track"
+        }
+      }
+    },
+    "Track": {
+      "source": {
+        "object": "\"Track\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ],
+      "relationships": {
+        "album": {
+          "cardinality": "one",
+          "target.entity": "Album"
+        },
+        "genre": {
+          "cardinality": "one",
+          "target.entity": "Genre"
+        }
+      }
+    },
+    "Genre": {
+      "source": {
+        "object": "\"Genre\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "Customer": {
+      "source": {
+        "object": "\"Customer\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ]
+    },
+    "Invoice": {
+      "source": {
+        "object": "\"Invoice\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ],
+      "relationships": {
+        "customer": {
+          "cardinality": "one",
+          "target.entity": "Customer"
+        }
+      }
+    },
+    "InvoiceLine": {
+      "source": {
+        "object": "\"InvoiceLine\"",
+        "type": "table"
+      },
+      "permissions": [
+        { "role": "anonymous", "actions": ["read"] }
+      ],
+      "relationships": {
+        "invoice": {
+          "cardinality": "one",
+          "target.entity": "Invoice"
+        },
+        "track": {
+          "cardinality": "one",
+          "target.entity": "Track"
+        }
+      }
+    }
+  }
+}
