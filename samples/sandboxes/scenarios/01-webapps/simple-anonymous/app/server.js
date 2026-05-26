@@ -206,7 +206,7 @@ function page() {
     <nav class="flex items-center gap-3 text-sm">
       <a href="https://sandboxes.azure.com" target="_blank" rel="noopener"
          class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">Portal ↗</a>
-      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps/simple-anonymous"
+      <a href="https://github.com/annaji-msft/ai-apps/tree/main/samples/sandboxes/scenarios/01-webapps/simple-anonymous"
          target="_blank" rel="noopener"
          class="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 transition">GitHub ↗</a>
     </nav>
@@ -505,7 +505,7 @@ sandbox.delete()
     <div>Served from <code class="text-slate-200">${esc(h.hostname)}</code> · started <code class="text-slate-200">${STARTED_AT.toISOString()}</code></div>
     <div class="flex gap-4">
       <a href="https://sandboxes.azure.com" target="_blank" rel="noopener" class="hover:text-white">sandboxes.azure.com ↗</a>
-      <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps/simple-anonymous" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>
+      <a href="https://github.com/annaji-msft/ai-apps/tree/main/samples/sandboxes/scenarios/01-webapps/simple-anonymous" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>
     </div>
   </div>
 </footer>
