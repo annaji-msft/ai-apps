@@ -41,6 +41,12 @@ function safeRead(path) {
   try { return fs.readFileSync(path, 'utf8').trim(); } catch (_) { return ''; }
 }
 
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function readDistro() {
   const txt = safeRead('/etc/os-release');
   if (!txt) return '';
@@ -208,7 +214,10 @@ function page() {
       <span class="size-1.5 rounded-full bg-emerald-400 pulse-dot"></span> live · responding
     </span>
     <span class="rounded-full bg-white/5 text-slate-300 px-3 py-1 ring-1 ring-white/10 font-mono">
-      ${h.hostname} · up <span id="hero-uptime">${h.uptime}</span>s
+      ${esc(h.hostname)} · up <span id="hero-uptime">${h.uptime}</span>s
+    </span>
+    <span class="rounded-full bg-brand-500/10 text-brand-400 px-3 py-1 ring-1 ring-brand-500/30 font-mono">
+      pattern: simple-anonymous · port 8080 open to the internet
     </span>
   </div>
   <h1 class="mt-5 text-5xl sm:text-6xl font-bold tracking-tight">
@@ -236,15 +245,15 @@ function page() {
   <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">System info <span class="font-normal normal-case text-slate-500">(uname -a + os-release)</span></h2>
   <div class="card rounded-2xl ring-1 ring-white/10 p-6">
     <dl class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-4 text-sm">
-      <div><dt class="text-slate-400">Hostname</dt><dd class="font-mono mt-0.5">${s.hostname}</dd></div>
-      <div><dt class="text-slate-400">Distro</dt><dd class="font-mono mt-0.5">${s.distro}</dd></div>
-      <div><dt class="text-slate-400">Kernel</dt><dd class="font-mono mt-0.5">${s.kernel} ${s.osRelease}</dd></div>
-      <div><dt class="text-slate-400">Arch</dt><dd class="font-mono mt-0.5">${s.arch}</dd></div>
-      <div class="md:col-span-2"><dt class="text-slate-400">CPU</dt><dd class="font-mono mt-0.5 truncate" title="${s.cpuModel}">${s.cpuModel}</dd></div>
+      <div><dt class="text-slate-400">Hostname</dt><dd class="font-mono mt-0.5">${esc(s.hostname)}</dd></div>
+      <div><dt class="text-slate-400">Distro</dt><dd class="font-mono mt-0.5">${esc(s.distro)}</dd></div>
+      <div><dt class="text-slate-400">Kernel</dt><dd class="font-mono mt-0.5">${esc(s.kernel)} ${esc(s.osRelease)}</dd></div>
+      <div><dt class="text-slate-400">Arch</dt><dd class="font-mono mt-0.5">${esc(s.arch)}</dd></div>
+      <div class="md:col-span-2"><dt class="text-slate-400">CPU</dt><dd class="font-mono mt-0.5 truncate" title="${esc(s.cpuModel)}">${esc(s.cpuModel)}</dd></div>
       <div><dt class="text-slate-400">vCPUs</dt><dd class="font-mono mt-0.5">${s.cpus}</dd></div>
       <div><dt class="text-slate-400">Memory</dt><dd class="font-mono mt-0.5">${s.totalMemMB} MB</dd></div>
-      <div><dt class="text-slate-400">Node</dt><dd class="font-mono mt-0.5">${s.nodeVersion}</dd></div>
-      <div><dt class="text-slate-400">Internal IP</dt><dd class="font-mono mt-0.5">${s.ip}</dd></div>
+      <div><dt class="text-slate-400">Node</dt><dd class="font-mono mt-0.5">${esc(s.nodeVersion)}</dd></div>
+      <div><dt class="text-slate-400">Internal IP</dt><dd class="font-mono mt-0.5">${esc(s.ip)}</dd></div>
     </dl>
   </div>
 </section>
@@ -396,8 +405,8 @@ az login
 <span class="text-slate-500"># 1. Create a resource group (skip if you have one)</span>
 az group create --name my-rg --location eastus2
 
-<span class="text-slate-500"># 2. Create a sandbox group (saves config automatically)</span>
-<span class="text-fuchsia-300">aca</span> sandboxgroup create --name my-sandbox-group --location eastus2 --set-config
+<span class="text-slate-500"># 2. Create a sandbox group (--set-config saves my-rg + region as defaults)</span>
+<span class="text-fuchsia-300">aca</span> sandboxgroup create --name my-sandbox-group -g my-rg --location eastus2 --set-config
 
 <span class="text-slate-500"># 3. Grant yourself data-plane access</span>
 <span class="text-fuchsia-300">aca</span> sandboxgroup role create \
@@ -407,71 +416,39 @@ az group create --name my-rg --location eastus2
 <span class="text-slate-500"># 4. Verify setup</span>
 <span class="text-fuchsia-300">aca</span> doctor
 
-<span class="text-slate-500"># 5. Create a sandbox</span>
-<span class="text-fuchsia-300">aca</span> sandbox create --disk ubuntu
+<span class="text-slate-500"># 5. Create a sandbox and capture its id</span>
+SANDBOX_ID=$(<span class="text-fuchsia-300">aca</span> sandbox create --disk ubuntu -o json | jq -r .id)
 
 <span class="text-slate-500"># 6. Run a command</span>
-<span class="text-fuchsia-300">aca</span> sandbox exec --id &lt;sandbox-id&gt; -c <span class="text-emerald-300">"echo hello world &amp;&amp; uname -a"</span>
+<span class="text-fuchsia-300">aca</span> sandbox exec --id <span class="text-amber-300">"$SANDBOX_ID"</span> -c <span class="text-emerald-300">"echo hello world &amp;&amp; uname -a"</span>
 
 <span class="text-slate-500"># 7. Clean up</span>
-<span class="text-fuchsia-300">aca</span> sandbox delete --id &lt;sandbox-id&gt; --yes</pre>
+<span class="text-fuchsia-300">aca</span> sandbox delete --id <span class="text-amber-300">"$SANDBOX_ID"</span> --yes</pre>
 
     <pre id="snippet-sdk" class="tab-pane hidden p-6 text-sm overflow-x-auto text-slate-100"><span class="text-slate-500"># Install</span>
 pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
-pip install azure-mgmt-resource azure-mgmt-authorization
 
-<span class="text-slate-500"># Then in Python:</span>
-<span class="text-brand-400">import</span> uuid
+<span class="text-slate-500"># Then in Python (assumes sandbox group + role already exist — see CLI tab or README):</span>
 <span class="text-brand-400">from</span> azure.identity <span class="text-brand-400">import</span> DefaultAzureCredential
-<span class="text-brand-400">from</span> azure.mgmt.resource <span class="text-brand-400">import</span> ResourceManagementClient
-<span class="text-brand-400">from</span> azure.mgmt.authorization <span class="text-brand-400">import</span> AuthorizationManagementClient
-<span class="text-brand-400">from</span> azure.containerapps.sandbox <span class="text-brand-400">import</span> (
-    SandboxGroupManagementClient,
-    SandboxGroupClient,
-    endpoint_for_region,
-)
+<span class="text-brand-400">from</span> azure.containerapps.sandbox <span class="text-brand-400">import</span> SandboxGroupClient, endpoint_for_region
 
-credential       = DefaultAzureCredential()
-subscription_id  = <span class="text-emerald-300">"&lt;your-subscription-id&gt;"</span>   <span class="text-slate-500"># az account show --query id -o tsv</span>
-principal_id     = <span class="text-emerald-300">"&lt;your-principal-id&gt;"</span>      <span class="text-slate-500"># az ad signed-in-user show --query id -o tsv</span>
-resource_group   = <span class="text-emerald-300">"my-rg"</span>
-sandbox_group    = <span class="text-emerald-300">"my-sandbox-group"</span>
-region           = <span class="text-emerald-300">"eastus2"</span>
+credential      = DefaultAzureCredential()
+subscription_id = <span class="text-emerald-300">"&lt;your-subscription-id&gt;"</span>
+resource_group  = <span class="text-emerald-300">"my-rg"</span>
+sandbox_group   = <span class="text-emerald-300">"my-sandbox-group"</span>
+region          = <span class="text-emerald-300">"eastus2"</span>
 
-<span class="text-slate-500"># 1. Create resource group</span>
-ResourceManagementClient(credential, subscription_id) \
-    .resource_groups.create_or_update(resource_group, {<span class="text-emerald-300">"location"</span>: region})
-
-<span class="text-slate-500"># 2. Create sandbox group</span>
-mgmt = SandboxGroupManagementClient(credential,
-    subscription_id=subscription_id, resource_group=resource_group)
-mgmt.create_group(sandbox_group, location=region)
-
-<span class="text-slate-500"># 3. Grant data-plane access</span>
-auth = AuthorizationManagementClient(credential, subscription_id)
-scope = <span class="text-emerald-300">f"/subscriptions/{subscription_id}/resourceGroups/{resource_group}"</span>
-role  = <span class="text-brand-400">next</span>(auth.role_definitions.list(scope,
-    filter=<span class="text-emerald-300">"roleName eq 'Container Apps SandboxGroup Data Owner'"</span>))
-auth.role_assignments.create(scope, uuid.uuid4(), {
-    <span class="text-emerald-300">"role_definition_id"</span>: role.id,
-    <span class="text-emerald-300">"principal_id"</span>: principal_id,
-    <span class="text-emerald-300">"principal_type"</span>: <span class="text-emerald-300">"User"</span>,
-})
-
-<span class="text-slate-500"># 4. Connect to data plane and create a sandbox</span>
-client = SandboxGroupClient(endpoint_for_region(region), credential,
+client  = SandboxGroupClient(endpoint_for_region(region), credential,
     subscription_id=subscription_id,
     resource_group=resource_group,
     sandbox_group=sandbox_group)
 
 sandbox = client.begin_create_sandbox(disk=<span class="text-emerald-300">"ubuntu"</span>).result()
-
-<span class="text-slate-500"># 5. Run a command</span>
 <span class="text-brand-400">print</span>(sandbox.exec(<span class="text-emerald-300">"echo hello world &amp;&amp; uname -a"</span>).stdout)
-
-<span class="text-slate-500"># 6. Clean up</span>
 sandbox.delete()
-mgmt.delete_group(sandbox_group)</pre>
+
+<span class="text-slate-500"># First-time bootstrap (resource group, sandbox group, role assignment):</span>
+<span class="text-slate-500"># https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/README.md</span></pre>
   </div>
 
   <div class="mt-4 grid sm:grid-cols-2 gap-3 text-sm">
@@ -516,7 +493,7 @@ mgmt.delete_group(sandbox_group)</pre>
 
 <footer class="border-t border-white/5 mt-8">
   <div class="mx-auto max-w-6xl px-6 py-6 flex flex-col md:flex-row gap-3 items-center justify-between text-sm text-slate-400">
-    <div>Served from <code class="text-slate-200">${h.hostname}</code> · started <code class="text-slate-200">${STARTED_AT.toISOString()}</code></div>
+    <div>Served from <code class="text-slate-200">${esc(h.hostname)}</code> · started <code class="text-slate-200">${STARTED_AT.toISOString()}</code></div>
     <div class="flex gap-4">
       <a href="https://sandboxes.azure.com" target="_blank" rel="noopener" class="hover:text-white">sandboxes.azure.com ↗</a>
       <a href="https://github.com/annaji-msft/aca/tree/main/samples/sandboxes/scenarios/01-webapps/simple-anonymous" target="_blank" rel="noopener" class="hover:text-white">Source on GitHub ↗</a>

@@ -8,7 +8,7 @@ it to the world**, each one a small, runnable end-to-end example.
 | Pattern | What it shows | Status |
 |---------|---------------|--------|
 | [simple-anonymous](simple-anonymous/) | Hello-world Node.js app on `:8080`, port exposed **anonymously** (open to the internet). Tailwind landing page with live `/proc` + `os` stats. | ✅ ready |
-| [authenticated](authenticated/) | Same app, port gated by **Entra ID** (`add_port(..., email=...)`) — only specific emails/tenants reach it. | 📝 planned |
+| `authenticated` _(coming soon)_ | Same app, port gated by **Entra ID** (`add_port(..., email=...)`) — only specific emails/tenants reach it. | 📝 planned |
 
 Each pattern is fully self-contained under its own folder:
 
