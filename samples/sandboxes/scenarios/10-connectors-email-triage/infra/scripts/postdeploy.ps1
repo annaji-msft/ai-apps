@@ -62,6 +62,27 @@ az containerapp update `
     --set-env-vars "CONNECTOR_GATEWAY_API_KEY=secretref:connector-gateway-api-key" `
     --output none
 
+# ---- 2b. GitHub PAT (so Copilot CLI can talk to GitHub Models) ----------
+$githubPat = $outputs.GITHUB_PAT
+if ([string]::IsNullOrEmpty($githubPat)) {
+    $githubPat = [System.Environment]::GetEnvironmentVariable('GITHUB_PAT')
+}
+if ([string]::IsNullOrEmpty($githubPat)) {
+    Write-Host ''
+    Write-Host '==> WARNING: GITHUB_PAT is not set.' -ForegroundColor Yellow
+    Write-Host '    Copilot CLI in each sandbox will fail to auth to GitHub Models.' -ForegroundColor Yellow
+    Write-Host '    Set it with:  azd env set GITHUB_PAT <your-classic-or-fine-grained-PAT>' -ForegroundColor Yellow
+    Write-Host '    then re-run:  azd hooks run postdeploy' -ForegroundColor Yellow
+} else {
+    Write-Host "==> Setting GITHUB_PAT secret on receiver (length=$($githubPat.Length))..." -ForegroundColor Yellow
+    az containerapp secret set `
+        --resource-group $resourceGroupName --name $receiverContainerAppName `
+        --secrets "github-pat=$githubPat" --output none
+    az containerapp update `
+        --resource-group $resourceGroupName --name $receiverContainerAppName `
+        --set-env-vars "GITHUB_PAT=secretref:github-pat" --output none
+}
+
 # ---- 3. Install the connector-namespace CLI extension --------------------
 $ext = az extension show --name connector-namespace 2>$null
 if (-not $ext) {

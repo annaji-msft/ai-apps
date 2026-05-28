@@ -53,6 +53,23 @@ CONNECTOR_GATEWAY_API_KEY = os.environ.get("CONNECTOR_GATEWAY_API_KEY", "").stri
 # Required only when bypassing auth (local dev). In azd-deploy mode,
 # the Connector Gateway uses MI + Easy Auth at the ACA edge.
 WEBHOOK_SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "").strip()
+# GitHub PAT used to authenticate Copilot CLI to GitHub Models (the
+# LLM backend Copilot itself calls). Populated by post-deploy from the
+# `azd env set GITHUB_PAT ...` value. Like CONNECTOR_GATEWAY_API_KEY,
+# this never enters the sandbox — the egress proxy stamps it onto
+# outbound requests to api.github.com and the two githubcopilot.com
+# hosts at the sandbox boundary.
+GITHUB_PAT = os.environ.get("GITHUB_PAT", "").strip()
+
+# GitHub host families Copilot CLI talks to that need an Authorization
+# header. Mirrors scenarios/02-coding-agents/gh-copilot-cli — *not*
+# adding explicit Allow rules for these hosts, because an Allow would
+# short-circuit the Transform and let the request out without the PAT.
+_GITHUB_TRANSFORM_HOSTS: tuple[tuple[str, str, str], ...] = (
+    ("api.github.com",                         "token",  "github-api-auth"),
+    ("api.enterprise.githubcopilot.com",       "Bearer", "copilot-enterprise-auth"),
+    ("telemetry.enterprise.githubcopilot.com", "Bearer", "copilot-telemetry-auth"),
+)
 
 # Computed.
 def _gateway_host_from_id(gateway_id: str) -> str:
@@ -280,16 +297,10 @@ async def _install_copilot(sandbox, run_id: str) -> None:
 async def _apply_egress_policy(sandbox) -> None:
     mcp_host = _mcp_host()
     await sandbox.set_egress_default("Deny")
-    # Allow only what's strictly needed.
-    for host in (
-        mcp_host,
-        # Copilot CLI auth / telemetry — needs separate Transform if you
-        # want it to read GitHub Models, but for the Teams-only use case
-        # here we only need the gateway.
-    ):
-        await sandbox.add_egress_host_rule(host, action="Allow")
-    # X-API-Key Transform rule. The sandbox never sees this value;
-    # the egress proxy holds it and stamps every outbound MCP request.
+    # MCP host Transform implicitly allows the request through AND
+    # stamps the gateway API key. Don't ALSO add a host-allow rule for
+    # the MCP host — a host-allow + Transform on the same host
+    # short-circuits the Transform.
     await sandbox.add_egress_transform_rule(
         host=mcp_host,
         headers=[EgressHeader(
@@ -299,6 +310,29 @@ async def _apply_egress_policy(sandbox) -> None:
         )],
         name="mcp-api-key",
     )
+    # GitHub PAT injection — Copilot CLI needs to authenticate to
+    # GitHub Models (its LLM backend) and the GitHub auth/API host.
+    # If GITHUB_PAT isn't set the egress lockdown still applies but
+    # copilot will error 'No authentication information found' on
+    # first run; we log a clear warning so the next maintainer can
+    # see it in the receiver logs.
+    if GITHUB_PAT:
+        for host, scheme, name in _GITHUB_TRANSFORM_HOSTS:
+            await sandbox.add_egress_transform_rule(
+                host=host,
+                headers=[EgressHeader(
+                    operation="Set",
+                    name="Authorization",
+                    value=f"{scheme} {GITHUB_PAT}",
+                )],
+                name=name,
+            )
+    else:
+        log.warning(
+            "GITHUB_PAT is not set — Copilot CLI will fail to authenticate "
+            "with GitHub Models. Set it via `azd env set GITHUB_PAT <token>` "
+            "and re-run azd hooks run postdeploy."
+        )
 
 
 async def _stage_prompt(sandbox, email: dict[str, Any], run_id: str) -> None:
@@ -346,13 +380,37 @@ def _render_prompt(email: dict[str, Any], run_id: str) -> str:
 
 async def _run_copilot(sandbox, run_id: str) -> None:
     log.info("[%s] running copilot...", run_id)
+    # Diagnostic — show copilot version + a quick auth status check
+    # before the real run, so when something's wrong we can tell whether
+    # it's an auth issue vs a network issue vs the prompt itself.
+    v = await sandbox.exec("timeout 10s bash -lc 'copilot --version 2>&1 || true'")
+    log.info("[%s] copilot --version: %s", run_id, (v.stdout or "").strip()[:300])
+
+    # TRADE-OFF: Copilot CLI v1 errors immediately if no credential is
+    # present in its env (COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN)
+    # — it does NOT attempt a network call first. That means the egress
+    # proxy's Transform rule on api.github.com can't intervene to inject
+    # the PAT, because Copilot never reaches the network. For
+    # non-interactive use we have to put the PAT in the sandbox env
+    # too. The egress-proxy Transform rule still fires on outbound
+    # requests as defense-in-depth, but the sandbox sees the PAT.
+    #
+    # If you can't accept that trade-off, this scenario isn't the right
+    # fit — switch to scenario 11 (Python tool-calling against AOAI via
+    # the egress proxy, no PAT in the sandbox).
+    pat_env = ""
+    if GITHUB_PAT:
+        pat_env = f"COPILOT_GITHUB_TOKEN={GITHUB_PAT} "
+
     r = await sandbox.exec(
-        "timeout 240s bash -lc 'copilot --allow-all-tools -p \"$(cat /tmp/prompt.md)\"'"
+        f"timeout 240s bash -lc '{pat_env}copilot --allow-all-tools -p \"$(cat /tmp/prompt.md)\" 2>&1'"
     )
+    # Don't truncate — when Copilot fails its message includes the full
+    # error contract that tells us what to fix next (auth, network, etc.).
     log.info(
-        "[%s] copilot exit=%d stdout=%s stderr=%s",
+        "[%s] copilot exit=%d\nstdout:\n%s\n[--- end stdout ---]",
         run_id, r.exit_code,
-        (r.stdout or "")[:400], (r.stderr or "")[:200],
+        (r.stdout or ""),
     )
     if r.exit_code != 0:
         raise RuntimeError(f"copilot run failed exit={r.exit_code}")
