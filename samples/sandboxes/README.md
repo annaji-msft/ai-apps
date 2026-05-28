@@ -85,6 +85,7 @@ documentation and how to override defaults.
 | 07 | [computer-use](scenarios/07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview` / gpt-5.4) driving Chrome inside a sandbox to fill out a form or any web task; watch live via noVNC. Built on the OpenAI Agents SDK (`AsyncComputer` + `ComputerTool`). | ✅ OpenAI ready |
 | 08 | [sandbox-agents](scenarios/08-sandbox-agents) | Agent frameworks (OpenAI Agents SDK, Claude Managed Agents, LangChain Deep Agents) using ACA sandboxes as their tool-execution backend. OpenAI ships a **first-class provider package** (`agents_aca_sandboxes`) plus a live Deep Research demo and a platform-architecture brief. | ✅ OpenAI provider + demo |
 | 09 | [mcp-hosting](scenarios/09-mcp-hosting) | Host MCP servers in a sandbox — `excalidraw-anonymous` (public via `add_port`) and `dab-sql-devtunnel` (DAB + Postgres + Chinook, exposed via Dev Tunnels with **no inbound port** on the sandbox) | ✅ Python ready · 📝 CLI planned |
+| 10 | [connectors-email-triage](scenarios/10-connectors-email-triage) | New-email trigger → **Azure Connector Gateway** (preview, `Microsoft.Web/connectorGateways`) dispatches → ACA receiver boots a sandbox per email → Copilot CLI posts a triage card to Teams via the gateway's **Managed MCP server**. Auth never enters the sandbox: the egress proxy stamps the gateway API key on outbound MCP calls. Full `azd up` (Bicep + Container App + post-deploy script). | ✅ azd-deployable |
 
 ## Reference
 

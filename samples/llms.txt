@@ -121,6 +121,22 @@ that uses these samples.
   [`langchain/`](sandboxes/scenarios/08-sandbox-agents/langchain/README.md)
   (Deep Agents `BaseSandbox`) are placeholders that will follow the
   same provider shape once their sandbox-provider surfaces stabilize.
+- [10-connectors-email-triage](sandboxes/scenarios/10-connectors-email-triage/README.md):
+  End-to-end **azd-deployable** scenario that wires an Outlook
+  `When a new email arrives (V3)` trigger on an Azure Connector
+  Gateway (`Microsoft.Web/connectorGateways`, preview) to a per-email
+  ACA sandbox running GitHub Copilot CLI. Copilot reads the email,
+  decides if it's important, and posts a triage card to Teams via the
+  gateway's **Managed MCP server** (also a connector gateway child
+  resource — published with a single Bicep declaration). The egress
+  proxy stamps the gateway API key onto outbound MCP requests so the
+  sandbox itself never holds a credential. Includes Bicep, FastAPI
+  receiver Container App, post-deploy script that issues + binds the
+  runtime API key and prints OAuth consent URLs, and a local-dev
+  Python runner that boots one sandbox by hand with a sample email
+  payload for prompt iteration. Composes
+  [`02-coding-agents/gh-copilot-cli`](sandboxes/scenarios/02-coding-agents/gh-copilot-cli/README.md)
+  and [`guides/08-egress`](sandboxes/guides/08-egress/README.md).
 
 ## Apps
 
