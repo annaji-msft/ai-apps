@@ -36,11 +36,11 @@ sequenceDiagram
     RX-->>TR: 202 (background processing)
     RX->>SBX: begin_create_sandbox + install Copilot
     RX->>SBX: set_egress_default(Deny) + allow MCP host + Transform: X-API-Key
-    RX->>SBX: write /tmp/prompt.md + /root/.config/copilot/mcp.json
+    RX->>SBX: write /tmp/prompt.md + /root/.copilot/mcp-config.json
     RX->>SBX: copilot --allow-all-tools -p @prompt.md
     SBX->>PROXY: POST mcpEndpoint /mcp (no key)
     PROXY->>MCP: same request + X-API-Key (added at the boundary)
-    MCP->>TEAMS: post_message via connection
+    MCP->>TEAMS: SendMessageToChannel via Work IQ Teams MCP
     TEAMS-->>MCP: 200
     MCP-->>PROXY: tool result
     PROXY-->>SBX: tool result
@@ -73,8 +73,8 @@ Where the gateway API key lives (and doesn't):
 │   ├── modules/
 │   │   ├── connector-gateway.bicep    Microsoft.Web/connectorGateways
 │   │   ├── connection-office365.bicep .../connections (Office365)
-│   │   ├── connection-teams.bicep     .../connections (Teams)
-│   │   ├── mcpserver-teams.bicep      .../mcpserverConfigs (Teams 'Post message')
+│   │   ├── connection-teams.bicep     .../connections (Teams MCP via a365teamsmcp)
+│   │   ├── mcpserver-teams.bicep      .../mcpserverConfigs (kind=ManagedMcpServer)
 │   │   ├── sandbox-group.bicep        Microsoft.App/sandboxGroups + SystemAssigned MI
 │   │   ├── receiver.bicep             Log Analytics + ACA env + receiver Container App
 │   │   └── trigger-on-new-email.bicep .../triggerconfigs (callbackUrl=receiver/webhook)
