@@ -32,6 +32,11 @@ from azure.containerapps.sandbox import (
     endpoint_for_region,
 )
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 
 # Host families Copilot CLI talks to. The three hosts in INJECT_HOSTS
 # are handled by Transform rules instead — adding them as host rules

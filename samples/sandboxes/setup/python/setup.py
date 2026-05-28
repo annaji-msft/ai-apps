@@ -50,6 +50,11 @@ from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.containerapps.sandbox import SandboxGroupManagementClient
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 ROLE_NAME = "Container Apps SandboxGroup Data Owner"
 DEFAULTS = {
     "ACA_RESOURCE_GROUP": "ai-apps-samples-rg",

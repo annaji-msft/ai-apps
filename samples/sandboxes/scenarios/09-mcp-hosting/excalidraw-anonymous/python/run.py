@@ -27,6 +27,11 @@ from azure.containerapps.sandbox import (
     endpoint_for_region,
 )
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 REPO_URL = "https://github.com/excalidraw/excalidraw-mcp.git"
 APP_DIR = "/home/user/mcp-app"
 MCP_PORT = 80
