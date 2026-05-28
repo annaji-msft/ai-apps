@@ -278,12 +278,18 @@ def _stage_data(sandbox) -> None:
     files = sorted(p for p in DATA_DIR.glob("*") if p.is_file())
     if not files:
         return
+    text_suffixes = {".csv", ".txt", ".json", ".jsonl", ".md", ".tsv", ".yaml", ".yml"}
     for f in files:
         rel = f.relative_to(DATA_DIR)
         dest = f"{WORKSPACE}/{DATA_SUBDIR}/{rel.as_posix()}"
-        # Read bytes — works for both text and binary.
-        sandbox.write_file(dest, f.read_bytes())
-        print(f"    staged {rel} ({f.stat().st_size:,} bytes)")
+        data = f.read_bytes()
+        # Normalise line endings for text files so a CRLF host doesn't
+        # leave \r\n inside a sandbox where downstream code (e.g.
+        # pd.read_csv) sees CR-decorated cell values.
+        if f.suffix.lower() in text_suffixes:
+            data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        sandbox.write_file(dest, data)
+        print(f"    staged {rel} ({len(data):,} bytes)")
 
 
 def _install_libs(sandbox) -> None:
