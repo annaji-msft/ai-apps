@@ -78,7 +78,7 @@ documentation and how to override defaults.
 |---|---|---|---|
 | 01 | [webapps](scenarios/01-webapps) | Run a web app in a sandbox; patterns include `simple-anonymous` (open to the internet) and (planned) `authenticated` (Entra-gated) | ✅ ready |
 | 02 | [coding-agents](scenarios/02-coding-agents) | Run **Copilot CLI** in a sandbox with deny-default egress + portal-paste PAT injection (Python + CLI). Claude Code / Codex stubs included. | ✅ Copilot CLI ready |
-| 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
+| 03 | [code-interpreter](scenarios/03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate. `openai/` variant ships (Azure OpenAI + tool calling against a `python-3.14` sandbox; sample sales CSV; matplotlib artifacts downloaded to host) | ✅ Azure OpenAI ready · 📝 anthropic planned |
 | 04 | [swarms](scenarios/04-swarms) | Orchestrator coordinating many sandbox workers — variants 01 (sandbox inception: orchestrator sandbox spawns workers in another group via its group's MI) and 02 (same plus an AzureBlob volume as durable shared scratchpad) ship now | ✅ ready |
 | 05 | [data-processing](scenarios/05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
 | 06 | [developer-workflows](scenarios/06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |

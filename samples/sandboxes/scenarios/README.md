@@ -1,15 +1,14 @@
 # Sandbox scenarios
 
 Composed use cases that combine multiple sandbox capabilities. Most
-scenarios here are runnable today; `03`, `05`, and `06` are
-placeholders — start with the [guides](../guides/) for runnable code
-on those topics.
+scenarios here are runnable today; `05` and `06` are placeholders —
+start with the [guides](../guides/) for runnable code on those topics.
 
 | # | Scenario | What it shows | Status |
 |---|---|---|---|
 | 01 | [webapps](01-webapps) | Run a web app in a sandbox; patterns include `simple-anonymous` (open to the internet) and (planned) `authenticated` (Entra-gated) | ✅ ready |
 | 02 | [coding-agents](02-coding-agents) | Run **Copilot CLI** in a sandbox with deny-default egress + portal-paste PAT injection (Python + CLI). Claude Code / Codex stubs included. | ✅ Copilot CLI ready |
-| 03 | [code-interpreter](03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate | 📝 planned |
+| 03 | [code-interpreter](03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate. `openai/` (Azure OpenAI + tool calling, sales CSV, plot retrieval) | ✅ Azure OpenAI ready |
 | 04 | [swarms](04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers (`sandbox-inception`, `shared-blob-memory`) | ✅ ready |
 | 05 | [data-processing](05-data-processing) | Producer/consumer pipelines on shared AzureBlob volumes | 📝 planned |
 | 06 | [developer-workflows](06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |

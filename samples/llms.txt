@@ -68,7 +68,13 @@ that uses these samples.
   is attached to outbound requests by the egress proxy and never
   enters the sandbox. Claude Code / Codex stubs included.
 - [03-code-interpreter](sandboxes/scenarios/03-code-interpreter/README.md):
-  LLM-driven code execution — generate, run, observe, iterate.
+  LLM-driven Python execution. Azure OpenAI drives a multi-turn
+  `chat.completions` + tool-calling loop where each `python_exec` runs
+  inside a fresh ACA microVM (Python disk + pandas/matplotlib). Includes
+  a sample sales CSV, automatic artifact (plot) retrieval to the host's
+  `./out/`, and explicit "deny-default egress" guidance. Same shape as
+  OpenAI Code Interpreter, but the data and the sandbox stay in your
+  tenant. `openai/` variant ships; `anthropic/` planned.
 - [04-swarms](sandboxes/scenarios/04-swarms/README.md):
   Orchestrator coordinating many sandbox workers. Variant
   [`01-sandbox-inception`](sandboxes/scenarios/04-swarms/01-sandbox-inception/README.md)
