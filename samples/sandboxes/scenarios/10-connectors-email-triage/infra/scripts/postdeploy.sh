@@ -119,6 +119,22 @@ else
     --output none
 fi
 
+# ---- 2c. Optional Teams target (pre-pinned team + channel IDs) ----------
+teamId=$(echo "$outputs" | jq -r '.TEAMS_TEAM_ID // empty')
+channelId=$(echo "$outputs" | jq -r '.TEAMS_CHANNEL_ID // empty')
+if [[ -n "$teamId" && -n "$channelId" ]]; then
+  echo -e "${YELLOW}==> Setting TEAMS_TEAM_ID + TEAMS_CHANNEL_ID env on receiver...${NC}"
+  az containerapp update \
+    --resource-group "$resourceGroupName" \
+    --name "$receiverContainerAppName" \
+    --set-env-vars "TEAMS_TEAM_ID=$teamId" "TEAMS_CHANNEL_ID=$channelId" \
+    --output none
+else
+  echo -e "${YELLOW}==> WARNING: TEAMS_TEAM_ID / TEAMS_CHANNEL_ID not set.${NC}"
+  echo -e "${YELLOW}    Copilot will need to guess the Teams target in each tool call.${NC}"
+  echo -e "${YELLOW}    Set with:  azd env set TEAMS_TEAM_ID <gid>; azd env set TEAMS_CHANNEL_ID <cid>${NC}"
+fi
+
 # ---- 3. Install the connector-namespace CLI extension --------------------
 if ! az extension show --name connector-namespace >/dev/null 2>&1; then
   echo -e "${YELLOW}==> Installing experimental 'connector-namespace' az CLI extension...${NC}"

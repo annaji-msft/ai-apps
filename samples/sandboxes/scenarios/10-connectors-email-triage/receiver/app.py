@@ -60,6 +60,11 @@ WEBHOOK_SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "").strip()
 # outbound requests to api.github.com and the two githubcopilot.com
 # hosts at the sandbox boundary.
 GITHUB_PAT = os.environ.get("GITHUB_PAT", "").strip()
+# Optional pre-pinned Teams target. When set, included in the prompt
+# so Copilot doesn't have to ask. When unset, the model is told to
+# look up the channel from its tools — fine for demo but unreliable.
+TEAMS_TEAM_ID = os.environ.get("TEAMS_TEAM_ID", "").strip()
+TEAMS_CHANNEL_ID = os.environ.get("TEAMS_CHANNEL_ID", "").strip()
 
 # GitHub host families Copilot CLI talks to that need an Authorization
 # header. Mirrors scenarios/02-coding-agents/gh-copilot-cli — *not*
@@ -373,6 +378,16 @@ def _render_prompt(email: dict[str, Any], run_id: str) -> str:
     body_preview = email.get("bodyPreview") or email.get("body", "")
     if isinstance(body_preview, dict):  # Graph-style {contentType, content}
         body_preview = body_preview.get("content", "")
+    teams_target = ""
+    if TEAMS_TEAM_ID and TEAMS_CHANNEL_ID:
+        teams_target = (
+            "\n\nWhen posting to Teams, use these exact identifiers in the "
+            "MCP tool's `recipient` parameter (the connector expects the V3 shape):\n"
+            f"  team / group id: {TEAMS_TEAM_ID}\n"
+            f"  channel id:       {TEAMS_CHANNEL_ID}\n"
+            "Format the message body as plain text or a small Adaptive Card; "
+            "do not invent any other recipients."
+        )
     return (
         f"You are a triage assistant. A new email just arrived.\n\n"
         f"Run ID: {run_id}\n"
@@ -381,8 +396,8 @@ def _render_prompt(email: dict[str, Any], run_id: str) -> str:
         f"Body preview:\n{body_preview[:2000]}\n\n"
         f"Classify this email as 'important' or 'normal'. If important, "
         f"post a short triage card to Teams using the `teams` MCP server "
-        f"tool `post_message`. Use the connection's default channel. "
-        f"If normal, do nothing."
+        f"tool `post_message`. If normal, do nothing."
+        f"{teams_target}"
     )
 
 

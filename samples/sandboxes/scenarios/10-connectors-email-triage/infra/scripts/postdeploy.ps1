@@ -83,6 +83,20 @@ if ([string]::IsNullOrEmpty($githubPat)) {
         --set-env-vars "GITHUB_PAT=secretref:github-pat" --output none
 }
 
+# ---- 2c. Optional Teams target (pre-pinned team + channel IDs) ----------
+$teamId    = $outputs.TEAMS_TEAM_ID
+$channelId = $outputs.TEAMS_CHANNEL_ID
+if (-not [string]::IsNullOrEmpty($teamId) -and -not [string]::IsNullOrEmpty($channelId)) {
+    Write-Host '==> Setting TEAMS_TEAM_ID + TEAMS_CHANNEL_ID env on receiver...' -ForegroundColor Yellow
+    az containerapp update `
+        --resource-group $resourceGroupName --name $receiverContainerAppName `
+        --set-env-vars "TEAMS_TEAM_ID=$teamId" "TEAMS_CHANNEL_ID=$channelId" --output none
+} else {
+    Write-Host '==> WARNING: TEAMS_TEAM_ID / TEAMS_CHANNEL_ID not set.' -ForegroundColor Yellow
+    Write-Host '    Copilot will need to guess the Teams target in each tool call.' -ForegroundColor Yellow
+    Write-Host '    Set with:  azd env set TEAMS_TEAM_ID <gid>; azd env set TEAMS_CHANNEL_ID <cid>' -ForegroundColor Yellow
+}
+
 # ---- 3. Install the connector-namespace CLI extension --------------------
 $ext = az extension show --name connector-namespace 2>$null
 if (-not $ext) {
