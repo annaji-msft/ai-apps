@@ -86,7 +86,14 @@ that uses these samples.
   durable shared scratchpad: workers stream JSON checkpoints, an
   aggregator sandbox lists the prefix after workers are gone).
 - [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
-  Producer/consumer pipelines on shared AzureBlob volumes.
+  Producer/consumer ETL pipeline on a shared AzureBlob volume. A
+  producer sandbox streams synthetic event batches into
+  `/mnt/shared/raw/` while a transformer sandbox concurrently enriches
+  them into `/mnt/shared/processed/`; an aggregator then summarises
+  everything. All three workers are pure stdlib (`open()`, `glob`,
+  `json`) — no Azure Blob SDK, no SAS tokens. Demonstrates
+  stream-while-process, atomic writes via `os.replace`, `.done/`
+  archive pattern, and zero blob plumbing. Composes guides 01 + 04.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
   PR builds, ephemeral CI, on-demand dev environments.
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
