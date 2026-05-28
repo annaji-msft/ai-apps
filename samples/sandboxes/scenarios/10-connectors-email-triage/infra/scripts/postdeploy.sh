@@ -1,163 +1,130 @@
 #!/usr/bin/env bash
-# Post-deploy script for sandboxes-connectors-email-triage.
+# Post-deploy hook for sandboxes-connectors-email-triage.
 #
-# Runs after `azd up` provisioned everything and `azd deploy` pushed
-# the receiver container image. Wires the runtime auth bits that
-# Bicep deliberately did not handle:
+# Reads azd outputs and finishes the runtime wiring that Bicep
+# deliberately deferred:
 #
-#   1. Fetches a Connector Gateway runtime API key (POST listApiKey),
-#      scoped to the Teams MCP server config.
-#   2. Sets that key as a secret on the receiver Container App and
-#      adds it to the app's environment as CONNECTOR_GATEWAY_API_KEY.
-#   3. Triggers a restart so the receiver loads the new env.
-#   4. Generates OAuth consent URLs for both connections (Office 365
-#      and Teams) and prints them. The user opens each in a browser
-#      and signs in once.
+#   1. Issues an MCP-config-scoped, never-expiring runtime API key
+#      from the Connector Gateway and stamps it onto the receiver
+#      Container App as a secret + secretref env var. The sandbox
+#      egress proxy uses it to add X-API-Key on outbound MCP calls.
+#   2. Installs the experimental `connector-namespace` az CLI extension
+#      if missing.
+#   3. Authorizes both connections (Office 365, Teams) by invoking the
+#      extension's `connection authorize` command, which pops a browser
+#      tab per connection for OAuth consent.
 #
-# When the user finishes consenting to both connections, the trigger
-# config starts firing on real emails and the end-to-end flow is live.
-#
-# Inputs come from azd outputs surfaced as env vars:
-#   AZURE_SUBSCRIPTION_ID
-#   AZURE_RESOURCE_GROUP
-#   CONNECTOR_GATEWAY_NAME
-#   OFFICE365_CONNECTION_NAME
-#   TEAMS_CONNECTION_NAME
-#   TEAMS_MCP_SERVER_CONFIG_NAME
-#   RECEIVER_CONTAINER_APP_NAME
-#   TENANT_ID
+# After this script finishes successfully, the trigger config (already
+# provisioned by Bicep with callbackUrl pointing at the receiver) will
+# start dispatching real email events at the receiver and the
+# end-to-end flow is live.
 
 set -euo pipefail
 
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RED='\033[0;31m'
+NC='\033[0m'
+
 API_VERSION="2026-05-01-preview"
+CONNECTOR_EXT_WHEEL="https://github.com/anthonychu/azure-cli-extensions/releases/download/connector-namespace-0.1.0/connector_namespace-0.1.0-py2.py3-none-any.whl"
 
-# ---- 0. Sanity / inputs ---------------------------------------------------
+echo -e "${YELLOW}==> Post-deploy: connector gateway wiring${NC}"
 
-require_var() {
-  local name="$1"
-  if [[ -z "${!name:-}" ]]; then
-    echo "error: required env var not set: $name" >&2
-    return 1
-  fi
-}
-
-require_var AZURE_SUBSCRIPTION_ID
-require_var AZURE_RESOURCE_GROUP
-require_var CONNECTOR_GATEWAY_NAME
-require_var OFFICE365_CONNECTION_NAME
-require_var TEAMS_CONNECTION_NAME
-require_var TEAMS_MCP_SERVER_CONFIG_NAME
-require_var RECEIVER_CONTAINER_APP_NAME
-require_var TENANT_ID
-
-if ! command -v az >/dev/null 2>&1; then
-  echo "error: az CLI not on PATH" >&2
+if ! command -v jq >/dev/null 2>&1; then
+  echo -e "${RED}error: jq is required. Install it (apt/brew/choco) and re-run.${NC}" >&2
   exit 1
 fi
 
-SIGNED_IN_OID="$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)"
-if [[ -z "$SIGNED_IN_OID" ]]; then
-  echo "warning: could not detect signed-in user objectId. Consent links will use a placeholder." >&2
-  SIGNED_IN_OID="00000000-0000-0000-0000-000000000000"
-fi
+# ---- 0. Inputs from azd outputs ------------------------------------------
+outputs=$(azd env get-values --output json)
 
-ARM="https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/connectorGateways/${CONNECTOR_GATEWAY_NAME}"
+subscriptionId=$(echo "$outputs" | jq -r '.AZURE_SUBSCRIPTION_ID')
+resourceGroupName=$(echo "$outputs" | jq -r '.resourceGroupName')
+connectorGatewayName=$(echo "$outputs" | jq -r '.connectorGatewayName')
+office365ConnectionName=$(echo "$outputs" | jq -r '.office365ConnectionName')
+teamsConnectionName=$(echo "$outputs" | jq -r '.teamsConnectionName')
+teamsMcpServerConfigName=$(echo "$outputs" | jq -r '.teamsMcpServerConfigName')
+receiverContainerAppName=$(echo "$outputs" | jq -r '.receiverContainerAppName')
 
-# ---- 1. Fetch the Connector Gateway runtime API key ----------------------
-echo "==> Fetching MCP runtime API key for '${TEAMS_MCP_SERVER_CONFIG_NAME}'..."
-# An MCP-config-scoped, never-expiring key is the right shape for a
-# long-running receiver. Rotate via az ad rest + listApiKey to roll.
-KEY_RESPONSE="$(az rest \
+for v in subscriptionId resourceGroupName connectorGatewayName \
+         office365ConnectionName teamsConnectionName \
+         teamsMcpServerConfigName receiverContainerAppName; do
+  if [[ -z "${!v}" || "${!v}" == "null" ]]; then
+    echo -e "${RED}error: azd output '$v' missing. Did the deployment succeed?${NC}" >&2
+    exit 1
+  fi
+done
+
+ARM="https://management.azure.com/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Web/connectorGateways/${connectorGatewayName}"
+
+# ---- 1. Fetch the runtime API key ----------------------------------------
+echo -e "${YELLOW}==> Issuing MCP runtime API key (scoped to '${teamsMcpServerConfigName}', neverExpire)...${NC}"
+
+keyBody=$(jq -nc \
+  --arg scope "$teamsMcpServerConfigName" \
+  '{ scope: $scope, neverExpire: true }')
+
+keyResp=$(az rest \
   --method post \
   --uri "${ARM}/listApiKey?api-version=${API_VERSION}" \
-  --body "{\"scope\": \"${TEAMS_MCP_SERVER_CONFIG_NAME}\", \"neverExpire\": true}" \
-  --headers Content-Type=application/json)"
+  --body "$keyBody" \
+  --headers Content-Type=application/json)
 
-API_KEY="$(printf '%s' "$KEY_RESPONSE" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("key",""))')"
-if [[ -z "$API_KEY" ]]; then
-  echo "error: listApiKey returned no key. Response: $KEY_RESPONSE" >&2
+apiKey=$(echo "$keyResp" | jq -r '.key // empty')
+if [[ -z "$apiKey" ]]; then
+  echo -e "${RED}error: listApiKey returned no key. Response: ${keyResp}${NC}" >&2
   exit 1
 fi
-echo "    got key (length=${#API_KEY})."
+echo -e "${CYAN}    got key (length=${#apiKey})${NC}"
 
-# ---- 2. Stamp the key onto the receiver Container App --------------------
-echo "==> Writing CONNECTOR_GATEWAY_API_KEY secret onto receiver ${RECEIVER_CONTAINER_APP_NAME}..."
+# ---- 2. Stamp it onto the receiver Container App -------------------------
+echo -e "${YELLOW}==> Setting receiver secret + env (Container App restarts automatically)...${NC}"
+
 az containerapp secret set \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$RECEIVER_CONTAINER_APP_NAME" \
-  --secrets "connector-gateway-api-key=${API_KEY}" \
+  --resource-group "$resourceGroupName" \
+  --name "$receiverContainerAppName" \
+  --secrets "connector-gateway-api-key=${apiKey}" \
   --output none
 
 az containerapp update \
-  --resource-group "$AZURE_RESOURCE_GROUP" \
-  --name "$RECEIVER_CONTAINER_APP_NAME" \
+  --resource-group "$resourceGroupName" \
+  --name "$receiverContainerAppName" \
   --set-env-vars "CONNECTOR_GATEWAY_API_KEY=secretref:connector-gateway-api-key" \
   --output none
 
-echo "    receiver restarted with new env."
+# ---- 3. Install the connector-namespace CLI extension --------------------
+if ! az extension show --name connector-namespace >/dev/null 2>&1; then
+  echo -e "${YELLOW}==> Installing experimental 'connector-namespace' az CLI extension...${NC}"
+  az extension add --source "${CONNECTOR_EXT_WHEEL}" --yes
+fi
 
-# ---- 3. Generate consent links for the two connections ------------------
-print_consent_link() {
+# ---- 4. Authorize the two connections ------------------------------------
+authorize_connection() {
   local conn_name="$1" label="$2"
-  echo
-  echo "==> Generating OAuth consent link for ${label} (${conn_name})..."
-  local body
-  body=$(cat <<EOF
-{
-  "parameters": [
-    {
-      "objectId": "${SIGNED_IN_OID}",
-      "parameterName": "token",
-      "redirectUrl": "https://portal.azure.com",
-      "tenantId": "${TENANT_ID}"
-    }
-  ]
-}
-EOF
-)
-  local response
-  response="$(az rest \
-    --method post \
-    --uri "${ARM}/connections/${conn_name}/listConsentLinks?api-version=${API_VERSION}" \
-    --body "$body" \
-    --headers Content-Type=application/json)"
-  local link
-  link="$(printf '%s' "$response" | python3 -c 'import json,sys;v=json.load(sys.stdin).get("value",[]);print(v[0].get("link","") if v else "")')"
-  if [[ -z "$link" ]]; then
-    echo "  warning: no link in response for ${label}: ${response}" >&2
-    return
-  fi
-  echo "  ${label} consent URL:"
-  echo "  ${link}"
+  echo ""
+  echo -e "${YELLOW}==> Authorizing ${label} (${conn_name})${NC}"
+  echo -e "${CYAN}    A browser tab will open. Sign in with the M365 account whose ${label}${NC}"
+  echo -e "${CYAN}    you want this connection to act on, then return to this terminal.${NC}"
+  az connector-namespace connection authorize \
+    --resource-group "$resourceGroupName" \
+    --namespace-name "$connectorGatewayName" \
+    --name "$conn_name"
 }
 
-print_consent_link "$OFFICE365_CONNECTION_NAME" "Office 365 (Outlook)"
-print_consent_link "$TEAMS_CONNECTION_NAME" "Microsoft Teams"
+authorize_connection "$office365ConnectionName" "Office 365 mailbox"
+authorize_connection "$teamsConnectionName"     "Microsoft Teams channel"
 
-# ---- 4. Final operator instructions --------------------------------------
-cat <<'EOF'
-
-============================================================================
-NEXT STEPS
-============================================================================
-
-  1. Open each consent URL above in a browser.
-  2. Sign in with the M365 account whose mailbox + Teams channel you want
-     the triage flow to use. (Same account is fine for both, or use
-     different accounts — the connection records who consented.)
-  3. After both connections show "Authenticated" in the portal, the
-     trigger config starts firing on every new email and the receiver
-     posts a triage card to the configured Teams channel when the email
-     is classified as "important".
-
-  Verify quickly:  az rest \\
-    --method get \\
-    --uri "${ARM}/connections/${OFFICE365_CONNECTION_NAME}?api-version=${API_VERSION}" \\
-    --query properties.overallStatus -o tsv
-
-  Expected: "Connected".
-
-  Tear it all down with:   azd down --purge --force --no-prompt
-
-============================================================================
-EOF
+# ---- 5. Done -------------------------------------------------------------
+echo ""
+echo -e "${GREEN}=============================================================${NC}"
+echo -e "${GREEN} ALL DONE${NC}"
+echo -e "${GREEN}=============================================================${NC}"
+echo -e "${CYAN} Send an email to the consented mailbox and watch the receiver:${NC}"
+echo -e "${CYAN}   az containerapp logs show -g ${resourceGroupName} \\${NC}"
+echo -e "${CYAN}     -n ${receiverContainerAppName} --follow${NC}"
+echo ""
+echo -e "${CYAN} Tear down with:${NC}"
+echo -e "${CYAN}   azd down --purge --force --no-prompt${NC}"
+echo ""

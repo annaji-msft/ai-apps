@@ -1,104 +1,91 @@
-# Post-deploy script for sandboxes-connectors-email-triage (Windows).
-# Mirrors infra/scripts/postdeploy.sh — see that file for the design notes.
+# Post-deploy hook for sandboxes-connectors-email-triage (Windows).
+# Mirrors infra/scripts/postdeploy.sh — see that file for design notes.
 
 $ErrorActionPreference = 'Stop'
-$apiVersion = '2026-05-01-preview'
 
-function Require-EnvVar([string]$Name) {
-    $val = [System.Environment]::GetEnvironmentVariable($Name)
+$apiVersion = '2026-05-01-preview'
+$connectorExtWheel = 'https://github.com/anthonychu/azure-cli-extensions/releases/download/connector-namespace-0.1.0/connector_namespace-0.1.0-py2.py3-none-any.whl'
+
+Write-Host '==> Post-deploy: connector gateway wiring' -ForegroundColor Yellow
+
+# ---- 0. Inputs from azd outputs ------------------------------------------
+$outputs = azd env get-values --output json | ConvertFrom-Json
+
+function Require-Output([string]$Name) {
+    $val = $outputs.$Name
     if ([string]::IsNullOrEmpty($val)) {
-        Write-Error "required env var not set: $Name"
+        throw "azd output '$Name' missing. Did the deployment succeed?"
     }
     return $val
 }
 
-$sub        = Require-EnvVar 'AZURE_SUBSCRIPTION_ID'
-$rg         = Require-EnvVar 'AZURE_RESOURCE_GROUP'
-$gw         = Require-EnvVar 'CONNECTOR_GATEWAY_NAME'
-$o365Conn   = Require-EnvVar 'OFFICE365_CONNECTION_NAME'
-$teamsConn  = Require-EnvVar 'TEAMS_CONNECTION_NAME'
-$mcpName    = Require-EnvVar 'TEAMS_MCP_SERVER_CONFIG_NAME'
-$rcv        = Require-EnvVar 'RECEIVER_CONTAINER_APP_NAME'
-$tenantId   = Require-EnvVar 'TENANT_ID'
+$subscriptionId            = Require-Output 'AZURE_SUBSCRIPTION_ID'
+$resourceGroupName         = Require-Output 'resourceGroupName'
+$connectorGatewayName      = Require-Output 'connectorGatewayName'
+$office365ConnectionName   = Require-Output 'office365ConnectionName'
+$teamsConnectionName       = Require-Output 'teamsConnectionName'
+$teamsMcpServerConfigName  = Require-Output 'teamsMcpServerConfigName'
+$receiverContainerAppName  = Require-Output 'receiverContainerAppName'
 
-$signedInOid = (az ad signed-in-user show --query id -o tsv 2>$null)
-if ([string]::IsNullOrEmpty($signedInOid)) {
-    Write-Warning 'Could not detect signed-in user objectId; consent links will use a placeholder.'
-    $signedInOid = '00000000-0000-0000-0000-000000000000'
-}
-
-$arm = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.Web/connectorGateways/$gw"
+$arm = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Web/connectorGateways/$connectorGatewayName"
 
 # ---- 1. Fetch the runtime API key ----------------------------------------
-Write-Host "==> Fetching MCP runtime API key for '$mcpName'..."
-$keyBody = @{ scope = $mcpName; neverExpire = $true } | ConvertTo-Json -Compress
+Write-Host "==> Issuing MCP runtime API key (scoped to '$teamsMcpServerConfigName', neverExpire)..." -ForegroundColor Yellow
+
+$keyBody = @{ scope = $teamsMcpServerConfigName; neverExpire = $true } | ConvertTo-Json -Compress
+
 $keyRespJson = az rest --method post --uri "$arm/listApiKey?api-version=$apiVersion" `
     --body $keyBody --headers Content-Type=application/json
 $keyResp = $keyRespJson | ConvertFrom-Json
 if (-not $keyResp.key) {
-    Write-Error "listApiKey returned no 'key' field. Response was: $keyRespJson"
+    throw "listApiKey returned no 'key'. Response: $keyRespJson"
 }
 $apiKey = $keyResp.key
-Write-Host "    got key (length=$($apiKey.Length))."
+Write-Host "    got key (length=$($apiKey.Length))" -ForegroundColor Cyan
 
 # ---- 2. Stamp it onto the receiver Container App -------------------------
-Write-Host "==> Writing CONNECTOR_GATEWAY_API_KEY secret onto receiver $rcv..."
+Write-Host '==> Setting receiver secret + env (Container App restarts automatically)...' -ForegroundColor Yellow
+
 az containerapp secret set `
-    --resource-group $rg --name $rcv `
+    --resource-group $resourceGroupName --name $receiverContainerAppName `
     --secrets "connector-gateway-api-key=$apiKey" --output none
 
 az containerapp update `
-    --resource-group $rg --name $rcv `
+    --resource-group $resourceGroupName --name $receiverContainerAppName `
     --set-env-vars "CONNECTOR_GATEWAY_API_KEY=secretref:connector-gateway-api-key" `
     --output none
 
-Write-Host '    receiver restarted with new env.'
-
-# ---- 3. Consent links ----------------------------------------------------
-function Print-Consent([string]$ConnName, [string]$Label) {
-    Write-Host ""
-    Write-Host "==> Generating OAuth consent link for $Label ($ConnName)..."
-    $body = @{
-        parameters = @(
-            @{
-                objectId      = $signedInOid
-                parameterName = 'token'
-                redirectUrl   = 'https://portal.azure.com'
-                tenantId      = $tenantId
-            }
-        )
-    } | ConvertTo-Json -Compress -Depth 5
-
-    $respJson = az rest --method post `
-        --uri "$arm/connections/$ConnName/listConsentLinks?api-version=$apiVersion" `
-        --body $body --headers Content-Type=application/json
-    $resp = $respJson | ConvertFrom-Json
-    $link = $resp.value | Select-Object -First 1 -ExpandProperty link
-    if (-not $link) {
-        Write-Warning "no link in response for $Label : $respJson"
-        return
-    }
-    Write-Host "  $Label consent URL:"
-    Write-Host "  $link"
+# ---- 3. Install the connector-namespace CLI extension --------------------
+$ext = az extension show --name connector-namespace 2>$null
+if (-not $ext) {
+    Write-Host "==> Installing experimental 'connector-namespace' az CLI extension..." -ForegroundColor Yellow
+    az extension add --source $connectorExtWheel --yes
 }
 
-Print-Consent $o365Conn 'Office 365 (Outlook)'
-Print-Consent $teamsConn 'Microsoft Teams'
+# ---- 4. Authorize the two connections ------------------------------------
+function Authorize-Connection([string]$ConnName, [string]$Label) {
+    Write-Host ''
+    Write-Host "==> Authorizing $Label ($ConnName)" -ForegroundColor Yellow
+    Write-Host "    A browser tab will open. Sign in with the M365 account whose $Label" -ForegroundColor Cyan
+    Write-Host '    you want this connection to act on, then return to this terminal.' -ForegroundColor Cyan
+    az connector-namespace connection authorize `
+        --resource-group $resourceGroupName `
+        --namespace-name $connectorGatewayName `
+        --name $ConnName
+}
 
-# ---- 4. Operator wrap-up -------------------------------------------------
+Authorize-Connection $office365ConnectionName 'Office 365 mailbox'
+Authorize-Connection $teamsConnectionName     'Microsoft Teams channel'
+
+# ---- 5. Done -------------------------------------------------------------
 Write-Host ''
-Write-Host '============================================================================'
-Write-Host 'NEXT STEPS'
-Write-Host '============================================================================'
-Write-Host '  1. Open each consent URL above in a browser.'
-Write-Host '  2. Sign in with the M365 account whose mailbox + Teams channel you want'
-Write-Host '     the triage flow to use.'
-Write-Host '  3. After both connections show "Authenticated" in the portal, the'
-Write-Host '     trigger config starts firing on every new email and the receiver'
-Write-Host '     posts a triage card to the configured Teams channel when the email'
-Write-Host '     is classified as "important".'
+Write-Host '=============================================================' -ForegroundColor Green
+Write-Host ' ALL DONE' -ForegroundColor Green
+Write-Host '=============================================================' -ForegroundColor Green
+Write-Host ' Send an email to the consented mailbox and watch the receiver:' -ForegroundColor Cyan
+Write-Host "   az containerapp logs show -g $resourceGroupName \"
+Write-Host "     -n $receiverContainerAppName --follow"
 Write-Host ''
-Write-Host "  Verify Office 365 status:  az rest --method get --uri ""$arm/connections/$o365Conn`?api-version=$apiVersion"" --query properties.overallStatus -o tsv"
+Write-Host ' Tear down with:' -ForegroundColor Cyan
+Write-Host '   azd down --purge --force --no-prompt' -ForegroundColor Cyan
 Write-Host ''
-Write-Host '  Tear it all down with:   azd down --purge --force --no-prompt'
-Write-Host '============================================================================'
