@@ -22,7 +22,7 @@ param location string
 @description('Tags applied to the sandbox group resource.')
 param tags object = {}
 
-resource sandboxGroup 'Microsoft.App/sandboxGroups@2025-02-02-preview' = {
+resource sandboxGroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
   name: name
   location: location
   tags: tags

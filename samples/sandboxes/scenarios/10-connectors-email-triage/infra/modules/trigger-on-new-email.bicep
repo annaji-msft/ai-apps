@@ -42,10 +42,15 @@ resource trigger 'Microsoft.Web/connectorGateways/triggerconfigs@2026-05-01-prev
   properties: {
     description: triggerDescription
     connectionDetails: {
-      connectorName: 'Office365'
+      // Connector references in trigger configs use the connector's
+      // swagger short name (lowercase) — `office365`, not `Office365`.
+      // See the reference functions-connectors-net-builtinauth sample.
+      connectorName: 'office365'
       connectionName: office365ConnectionName
     }
-    operationName: 'When_a_new_email_arrives_(V3)'
+    // CamelCase swagger operationId — `OnNewEmailV3`, not the
+    // friendly-name-with-parens form.
+    operationName: 'OnNewEmailV3'
     parameters: [
       {
         name: 'folderPath'

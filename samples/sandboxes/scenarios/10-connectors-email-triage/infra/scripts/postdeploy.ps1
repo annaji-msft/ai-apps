@@ -32,10 +32,17 @@ $arm = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroup
 # ---- 1. Fetch the runtime API key ----------------------------------------
 Write-Host "==> Issuing MCP runtime API key (scoped to '$teamsMcpServerConfigName', neverExpire)..." -ForegroundColor Yellow
 
+# az CLI on Windows mangles inline JSON args when they contain quotes;
+# write to a temp file and reference it with @file syntax.
 $keyBody = @{ scope = $teamsMcpServerConfigName; neverExpire = $true } | ConvertTo-Json -Compress
-
-$keyRespJson = az rest --method post --uri "$arm/listApiKey?api-version=$apiVersion" `
-    --body $keyBody --headers Content-Type=application/json
+$keyBodyFile = New-TemporaryFile
+Set-Content -Path $keyBodyFile.FullName -Value $keyBody -Encoding utf8 -NoNewline
+try {
+    $keyRespJson = az rest --method post --uri "$arm/listApiKey?api-version=$apiVersion" `
+        --body "@$($keyBodyFile.FullName)" --headers Content-Type=application/json
+} finally {
+    Remove-Item $keyBodyFile.FullName -Force -ErrorAction SilentlyContinue
+}
 $keyResp = $keyRespJson | ConvertFrom-Json
 if (-not $keyResp.key) {
     throw "listApiKey returned no 'key'. Response: $keyRespJson"

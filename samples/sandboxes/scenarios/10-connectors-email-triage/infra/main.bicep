@@ -23,9 +23,9 @@
 
 targetScope = 'resourceGroup'
 
-@description('Short environment name appended to derived resource names (e.g., dev, demo).')
+@description('Short environment name appended to derived resource names (e.g., dev, demo). 2-32 chars.')
 @minLength(2)
-@maxLength(8)
+@maxLength(32)
 param environmentName string
 
 @description('Azure region for the Connector Gateway and the receiver Container App. Must be a Connector Gateway preview region.')
@@ -54,8 +54,20 @@ var teamsConnectionName = 'teams-${resourceToken}'
 var teamsMcpServerConfigName = 'teams-${resourceToken}'
 var triggerConfigName = 'onnewemail-${resourceToken}'
 var sandboxGroupName = 'sg-emailtriage-${resourceToken}'
+// ACR names must be 5-50 chars, alphanumeric only (no hyphens).
+var containerRegistryName = 'cremailtriage${resourceToken}'
 
-// ---- 1. Connector Gateway --------------------------------------------
+// ---- 0. Container Registry (azd needs this to push the receiver image) ---
+module registry 'modules/container-registry.bicep' = {
+  name: 'container-registry'
+  params: {
+    name: containerRegistryName
+    location: location
+    tags: tags
+  }
+}
+
+// ---- 1. Connector Gateway -------------------------------------------------
 module gateway 'modules/connector-gateway.bicep' = {
   name: 'gateway'
   params: {
@@ -112,8 +124,11 @@ module receiver 'modules/receiver.bicep' = {
     image: receiverImage
     sandboxGroupId: sandboxGroup.outputs.id
     sandboxGroupRegion: sandboxGroup.outputs.location
+    sandboxGroupName: sandboxGroup.outputs.name
     connectorGatewayId: gateway.outputs.id
     teamsMcpServerConfigName: teamsMcp.outputs.name
+    containerRegistryId: registry.outputs.id
+    containerRegistryLoginServer: registry.outputs.loginServer
     resourceToken: resourceToken
   }
 }
@@ -172,3 +187,6 @@ output subscriptionId string = subscription().subscriptionId
 
 @description('Resource group name.')
 output resourceGroupName string = resourceGroup().name
+
+@description('Azure Container Registry login server. azd reads this as AZURE_CONTAINER_REGISTRY_ENDPOINT and uses it as the push target for `azd deploy receiver`.')
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = registry.outputs.loginServer
