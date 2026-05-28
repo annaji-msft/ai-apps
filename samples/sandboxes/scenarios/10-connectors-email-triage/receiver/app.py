@@ -336,14 +336,21 @@ async def _apply_egress_policy(sandbox) -> None:
 
 
 async def _stage_prompt(sandbox, email: dict[str, Any], run_id: str) -> None:
-    """Write the triage prompt + an MCP server config to the sandbox."""
+    """Write the triage prompt + register the Teams MCP server.
+
+    Copilot CLI v1.x reads MCP server config from `~/.copilot/mcp-config.json`
+    (user-level) and `./.mcp.json` (workspace-level), per
+    `copilot mcp --help`. We write the user-level file so the same
+    config is in place no matter what cwd Copilot ends up in.
+    """
     mcp_url = _MCP_ENDPOINT_URL_CACHE
-    # MCP server registration for Copilot CLI. Copilot CLI reads
-    # mcp.json from $HOME/.config/copilot/mcp.json (subject to upstream
-    # spec).  We pass the URL only; egress proxy adds X-API-Key.
+    # Copilot CLI mcp-config.json shape: {"mcpServers": {"<name>": {<type-specific config>}}}
+    # For remote HTTP MCP servers, the type-specific config is
+    # {"type": "http", "url": "..."}. The egress proxy adds X-API-Key
+    # on the way out so we don't include it here.
     mcp_json = (
         '{\n'
-        '  "servers": {\n'
+        '  "mcpServers": {\n'
         '    "teams": {\n'
         '      "type": "http",\n'
         f'      "url": "{mcp_url}"\n'
@@ -351,7 +358,8 @@ async def _stage_prompt(sandbox, email: dict[str, Any], run_id: str) -> None:
         '  }\n'
         '}\n'
     )
-    await sandbox.write_file("/root/.config/copilot/mcp.json", mcp_json.encode("utf-8"))
+    await sandbox.exec("mkdir -p /root/.copilot")
+    await sandbox.write_file("/root/.copilot/mcp-config.json", mcp_json.encode("utf-8"))
 
     # Triage prompt — small, deterministic.  See prompts/triage.md for
     # the canonical source.
@@ -385,6 +393,11 @@ async def _run_copilot(sandbox, run_id: str) -> None:
     # it's an auth issue vs a network issue vs the prompt itself.
     v = await sandbox.exec("timeout 10s bash -lc 'copilot --version 2>&1 || true'")
     log.info("[%s] copilot --version: %s", run_id, (v.stdout or "").strip()[:300])
+
+    # Confirm Copilot can see our MCP server registration before we
+    # spend tokens on a real run. Cheap and self-documenting.
+    m = await sandbox.exec("timeout 10s bash -lc 'copilot mcp list 2>&1 || true'")
+    log.info("[%s] copilot mcp list:\n%s", run_id, (m.stdout or "").strip()[:600])
 
     # TRADE-OFF: Copilot CLI v1 errors immediately if no credential is
     # present in its env (COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN)
