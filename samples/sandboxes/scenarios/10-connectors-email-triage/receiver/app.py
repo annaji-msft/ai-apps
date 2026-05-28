@@ -381,12 +381,14 @@ def _render_prompt(email: dict[str, Any], run_id: str) -> str:
     teams_target = ""
     if TEAMS_TEAM_ID and TEAMS_CHANNEL_ID:
         teams_target = (
-            "\n\nWhen posting to Teams, use these exact identifiers in the "
-            "MCP tool's `recipient` parameter (the connector expects the V3 shape):\n"
-            f"  team / group id: {TEAMS_TEAM_ID}\n"
-            f"  channel id:       {TEAMS_CHANNEL_ID}\n"
-            "Format the message body as plain text or a small Adaptive Card; "
-            "do not invent any other recipients."
+            "\n\nWhen posting to Teams, call the `teams` MCP server's "
+            "`SendMessageToChannel` tool with these exact parameters:\n"
+            f"  teamId:    {TEAMS_TEAM_ID}\n"
+            f"  channelId: {TEAMS_CHANNEL_ID}\n"
+            "  content:   <your triage card text>\n"
+            "Do not call ListTeams or ListChannels — the IDs above are "
+            "already correct. Use plain text content (no HTML). Do not "
+            "invent any other recipients."
         )
     return (
         f"You are a triage assistant. A new email just arrived.\n\n"
@@ -395,8 +397,10 @@ def _render_prompt(email: dict[str, Any], run_id: str) -> str:
         f"From: {sender}\n\n"
         f"Body preview:\n{body_preview[:2000]}\n\n"
         f"Classify this email as 'important' or 'normal'. If important, "
-        f"post a short triage card to Teams using the `teams` MCP server "
-        f"tool `post_message`. If normal, do nothing."
+        f"post a short triage card (3-5 lines: subject, sender, one-sentence "
+        f"reason, run id footer) to Teams using the `teams` MCP server's "
+        f"`SendMessageToChannel` tool. If normal, print `verdict=normal` and "
+        f"do nothing else."
         f"{teams_target}"
     )
 

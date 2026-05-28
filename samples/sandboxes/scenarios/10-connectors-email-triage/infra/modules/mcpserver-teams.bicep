@@ -1,17 +1,20 @@
 // mcpserver-teams.bicep
 //
-// MCP server configuration on the Connector Gateway that exposes the
-// Microsoft Teams "Post message in a chat or channel (V3)" operation
-// as an MCP tool. The Connector Gateway publishes the MCP runtime
-// endpoint at:
+// Managed MCP server config on the Connector Gateway. Forwards every
+// MCP request to the upstream Work IQ Teams MCP server (`a365teamsmcp`)
+// via the connection created in `connection-teams.bicep`.
 //
+// kind=ManagedMcpServer means "this gateway MCP endpoint proxies to
+// a downstream managed MCP server". The downstream server publishes
+// its own tools/list (e.g., post a Teams message, search messages,
+// list chats) — we don't have to specify them; clients discover them
+// via the standard MCP handshake.
+//
+// The Connector Gateway publishes the runtime endpoint at:
 //   https://{host}/api/connectorGateways/{connectorGatewayId}/mcpserverconfigs/{name}/mcp
-//
-// Clients (this scenario: the Copilot CLI running inside an ACA
-// sandbox, behind the egress proxy) call the endpoint over MCP
-// Streamable HTTP / JSON-RPC 2.0. Authentication is the gateway API
-// key (`X-API-Key` header) — the egress proxy stamps it on the way
-// out so it never enters the sandbox.
+// Authentication is the gateway API key (`X-API-Key` header); our
+// sandbox's egress proxy stamps it on the way out so the sandbox
+// itself never holds the key.
 
 @description('Parent Connector Gateway resource name.')
 param gatewayName string
@@ -22,37 +25,39 @@ param gatewayName string
 param name string
 
 @description('Description shown to MCP clients via tools/list.')
-param mcpDescription string = 'Teams notification tool — post a message to a channel or chat.'
+param mcpDescription string = 'Microsoft Teams (Work IQ MCP) — post messages, search chats, list channels.'
 
-@description('Teams connection name created by the connection-teams module.')
+@description('Teams MCP connection name created by the connection-teams module.')
 param teamsConnectionName string
 
 resource gateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' existing = {
   name: gatewayName
 }
 
-// "kind" defaults to NotSpecified, which builds the MCP surface from
-// connectors[].operations[] below. This is the simplest publishing
-// shape and works against any managed connector that has the named
-// operation in its swagger.
 resource mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-preview' = {
   parent: gateway
   name: name
+  kind: 'ManagedMcpServer'
   properties: {
     description: mcpDescription
     connectors: [
       {
-        name: 'Teams'
+        // For kind=ManagedMcpServer, the connectors[] array references
+        // the connection backing the downstream MCP server. The runtime
+        // forwards JSON-RPC requests verbatim — we don't enumerate
+        // operations[] here because the downstream server publishes
+        // its own tool catalog via tools/list.
+        name: 'a365teamsmcp'
         connectionName: teamsConnectionName
+        // ManagedMcpServer requires exactly one operation per connector;
+        // 'mcp_TeamsServer' is the upstream MCP endpoint operation that
+        // the gateway proxies JSON-RPC traffic to. The downstream server
+        // publishes its own tool catalog via tools/list.
         operations: [
           {
-            // Swagger operationId for the V3 "Post a message" action.
-            // Names with parentheses are normalised to safe MCP tool
-            // names by the gateway runtime, so we keep the original
-            // operationId here exactly as the connector defines it.
-            name: 'Post_message_in_a_chat_or_channel_(V3)'
-            displayName: 'Post message in Teams'
-            description: 'Post an Adaptive Card or rich text message to a Teams chat or channel.'
+            name: 'mcp_TeamsServer'
+            displayName: 'Microsoft Teams MCP Server'
+            description: 'Upstream MCP endpoint that proxies JSON-RPC traffic to the Work IQ Teams MCP server.'
           }
         ]
       }

@@ -50,8 +50,12 @@ param tags object = {
 var resourceToken = take(uniqueString(resourceGroup().id, environmentName), 6)
 var connectorGatewayName = 'cg-emailtriage-${resourceToken}'
 var office365ConnectionName = 'office365-${resourceToken}'
-var teamsConnectionName = 'teams-${resourceToken}'
-var teamsMcpServerConfigName = 'teams-${resourceToken}'
+// New name: the old 'teams-*' connection was created against the
+// classic 'Teams' connector which doesn't actually exist in this
+// gateway's catalog. Renaming forces a fresh resource against
+// 'a365teamsmcp' (Work IQ Teams), which is what's actually available.
+var teamsConnectionName = 'teamsmcp-${resourceToken}'
+var teamsMcpServerConfigName = 'teamsmcp-${resourceToken}'
 var triggerConfigName = 'onnewemail-${resourceToken}'
 var sandboxGroupName = 'sg-emailtriage-${resourceToken}'
 // ACR names must be 5-50 chars, alphanumeric only (no hyphens).
