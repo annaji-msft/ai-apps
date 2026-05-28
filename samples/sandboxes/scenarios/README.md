@@ -1,8 +1,8 @@
 # Sandbox scenarios
 
-Composed use cases that combine multiple sandbox capabilities. Most
-scenarios here are runnable today; `06` is a placeholder — start with
-the [guides](../guides/) for runnable code on that topic.
+Composed use cases that combine multiple sandbox capabilities. Every
+scenario here is runnable today — `cd` into one, install its
+`requirements.txt`, run.
 
 | # | Scenario | What it shows | Status |
 |---|---|---|---|
@@ -11,7 +11,7 @@ the [guides](../guides/) for runnable code on that topic.
 | 03 | [code-interpreter](03-code-interpreter) | LLM-driven code execution — generate, run, observe, iterate. `openai/` (Azure OpenAI + tool calling, sales CSV, plot retrieval) | ✅ Azure OpenAI ready |
 | 04 | [swarms](04-swarms) | Many sandboxes, one orchestrator — fan-out work across N workers (`sandbox-inception`, `shared-blob-memory`) | ✅ ready |
 | 05 | [data-processing](05-data-processing) | Producer/consumer pipeline on a shared AzureBlob volume — producer streams batches, transformer enriches concurrently, aggregator summarises. Pure-stdlib workers. | ✅ Python ready · 📝 CLI planned |
-| 06 | [developer-workflows](06-developer-workflows) | PR builds, ephemeral CI, on-demand dev environments | 📝 planned |
+| 06 | [developer-workflows](06-developer-workflows) | Ephemeral CI runner — cold-boot + snapshot the warm runner, then build N PRs in parallel from the snapshot. Ships 3 synthetic PRs that exercise both pass and fail paths. | ✅ Python ready |
 | 07 | [computer-use](07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview`) driving Chromium inside a sandbox to fill out a form; watch live via noVNC | ✅ OpenAI ready |
 | 08 | [sandbox-agents](08-sandbox-agents) | Wire agent frameworks (OpenAI Agents SDK, LangChain, Anthropic) to a sandbox as their tool-execution environment | ✅ ready |
 | 09 | [mcp-hosting](09-mcp-hosting) | Host **Model Context Protocol (MCP)** servers in sandboxes (`excalidraw-anonymous`, `dab-sql-devtunnel`) for AI clients to connect over HTTPS | ✅ ready |

@@ -95,7 +95,14 @@ that uses these samples.
   stream-while-process, atomic writes via `os.replace`, `.done/`
   archive pattern, and zero blob plumbing. Composes guides 01 + 04.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
-  PR builds, ephemeral CI, on-demand dev environments.
+  Ephemeral CI runner pattern — cold-boot a base sandbox, `pip install
+  pytest`, snapshot the resulting "warm runner" image, then for each
+  pending PR create a fresh sandbox from the snapshot, upload the PR
+  diff with `write_file`, run `pytest`, and report pass/fail. Three
+  synthetic PRs ship (2 pass, 1 with a deliberate `mul()` regression
+  the tests catch) so first-time readers see both code paths. Exit
+  code follows CI conventions (0 / 2 / 1). Composes guides 01
+  (sandboxes) + 02 (snapshots) + 07 (files).
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
   LLM computer-use agent driving a Linux desktop inside a sandbox.
