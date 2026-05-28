@@ -34,8 +34,8 @@ param location string = resourceGroup().location
 @description('Azure region for the sandbox group. Must be a region where ACA sandboxes are available (e.g., westus2). Can differ from `location`.')
 param sandboxRegion string = location
 
-@description('Container image reference for the receiver app. Default is the placeholder mcr.io/azuredocs/aci-helloworld so the template provisions cleanly before `azd deploy` swaps it for the real image.')
-param receiverImage string = 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
+@description('Container image reference for the receiver app. Default is a tiny ACA quickstart image so the template provisions cleanly before `azd deploy receiver` swaps it for the real image.')
+param receiverImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 
 @description('Tags applied to every resource.')
 param tags object = {

@@ -88,7 +88,11 @@ resource env 'Microsoft.App/managedEnvironments@2024-10-02-preview' = {
 resource receiver 'Microsoft.App/containerApps@2024-10-02-preview' = {
   name: receiverAppName
   location: location
-  tags: tags
+  tags: union(tags, {
+    // azd looks up the receiver Container App by this tag during
+    // `azd deploy receiver`. Don't rename it.
+    'azd-service-name': 'receiver'
+  })
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: { '${ua.id}': {} }

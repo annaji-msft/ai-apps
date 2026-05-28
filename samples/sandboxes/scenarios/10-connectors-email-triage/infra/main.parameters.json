@@ -12,7 +12,7 @@
       "value": "${ACA_SANDBOX_REGION=westus2}"
     },
     "receiverImage": {
-      "value": "${RECEIVER_IMAGE=mcr.microsoft.com/azuredocs/aci-helloworld:latest}"
+      "value": "${RECEIVER_IMAGE=mcr.microsoft.com/k8se/quickstart:latest}"
     }
   }
 }
