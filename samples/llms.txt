@@ -142,6 +142,35 @@ that uses these samples.
   (Deep Agents `BaseSandbox`) are placeholders that will follow the
   same provider shape once their sandbox-provider surfaces stabilize.
 
+- [10-connectors-triggers](sandboxes/scenarios/10-connectors-triggers/README.md):
+  Connector-gateway triggers push outside events (Office 365, SharePoint,
+  OneDrive, …) into a sandbox webhook over HTTPS. Sub-scenarios:
+  ([`setup/`](sandboxes/scenarios/10-connectors-triggers/setup/README.md))
+  provisions a connector gateway with SystemAssigned MI, an Office 365
+  connection (one-time OAuth consent), and the gateway → connection
+  access policy. Also ships an `azd up` flow at the scenario root
+  ([`azure.yaml`](sandboxes/scenarios/10-connectors-triggers/azure.yaml))
+  — a tiny `infra/main.bicep` creates only the resource group; a
+  `postprovision` hook delegates to the same imperative setup scripts
+  (Bicep types for the preview connector-gateway APIs aren't published
+  yet);
+  ([`trigger-lifecycle/`](sandboxes/scenarios/10-connectors-triggers/trigger-lifecycle/README.md))
+  CRUD walk-through against a tiny in-script HTTP listener (no real
+  mailbox needed) — discover ops, PUT / list / disable / enable / delete
+  a trigger config, cleanup in trigger → port → sandbox order;
+  ([`email-to-sandbox/`](sandboxes/scenarios/10-connectors-triggers/email-to-sandbox/README.md))
+  round-trip Office 365 inbox → trigger → stdlib Python listener in a
+  sandbox → minimal stdlib processing (word/line/char counts) →
+  acknowledgment reply back through the **same** connection
+  (SendMailV2). Fires on emails whose
+  subject contains `Feedback`. Outbound auth is injected by an egress
+  transform rule that pulls a Bearer token from the sandbox-group MI.
+  Both sub-scenarios ship Python and bash flavors. Uses
+  `az rest` against `Microsoft.Web/connectorGateways` api-version
+  `2026-05-01-preview` (no Python SDK yet); the gateway MI is added to
+  the sandbox port's `entraId.objectIds` so the webhook POST is
+  managed-identity authenticated.
+
 ## Apps
 
 Coming in Phase 4. See [containerapps/README.md](containerapps/README.md).
@@ -152,7 +181,10 @@ Coming in Phase 6. See [connectors/README.md](connectors/README.md).
 
 ## Triggers
 
-Coming in Phase 7. See [triggers/README.md](triggers/README.md).
+Coming as a separate pillar in Phase 7. See [triggers/README.md](triggers/README.md).
+Today, connector-gateway triggers (webhook-style: Office 365, SharePoint,
+OneDrive, …) ship as
+[scenario 10 under sandboxes](sandboxes/scenarios/10-connectors-triggers/README.md).
 
 ## AI Gateway
 

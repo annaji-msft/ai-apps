@@ -15,3 +15,4 @@ scenario here is runnable today — `cd` into one, install its
 | 07 | [computer-use](07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview`) driving Chromium inside a sandbox to fill out a form; watch live via noVNC | ✅ OpenAI ready |
 | 08 | [sandbox-agents](08-sandbox-agents) | Wire agent frameworks (OpenAI Agents SDK, LangChain, Anthropic) to a sandbox as their tool-execution environment | ✅ ready |
 | 09 | [mcp-hosting](09-mcp-hosting) | Host **Model Context Protocol (MCP)** servers in sandboxes (`excalidraw-anonymous`, `dab-sql-devtunnel`) for AI clients to connect over HTTPS | ✅ ready |
+| 10 | [connectors-triggers](10-connectors-triggers) | Connector-gateway **triggers** push outside events (Office 365 / SharePoint / OneDrive / …) into a sandbox webhook. Includes a lifecycle walk-through and a round-trip Office 365 → sandbox → Office 365 reply scenario with minimal stdlib processing. | ✅ ready |

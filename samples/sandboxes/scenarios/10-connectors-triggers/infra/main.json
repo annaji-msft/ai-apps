@@ -1,0 +1,84 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "12641136312322978356"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the azd environment. Tagged on the RG so azd down knows what to delete."
+      }
+    },
+    "location": {
+      "type": "string",
+      "allowedValues": [
+        "australiaeast",
+        "brazilsouth",
+        "canadacentral",
+        "canadaeast",
+        "centralus",
+        "eastasia",
+        "eastus2",
+        "francecentral",
+        "germanywestcentral",
+        "japaneast",
+        "koreacentral",
+        "mexicocentral",
+        "northcentralus",
+        "northeurope",
+        "norwayeast",
+        "polandcentral",
+        "southafricanorth",
+        "southeastasia",
+        "southindia",
+        "spaincentral",
+        "swedencentral",
+        "switzerlandnorth",
+        "uksouth",
+        "westcentralus",
+        "westus",
+        "westus2",
+        "westus3"
+      ],
+      "minLength": 1,
+      "metadata": {
+        "description": "Primary region. Used as the RG location AND as the sandbox-group region (the sandboxes pillar setup.py uses one region for both). Constrained to the region list returned by Microsoft.App/sandboxGroups so this sample fails fast at deployment time rather than mid-hook. The connector gateway defaults to the same region; override via ACA_CONNECTOR_GATEWAY_REGION."
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "ai-apps-samples-rg",
+      "metadata": {
+        "description": "Name of the resource group to create. Defaults to ai-apps-samples-rg so it matches the existing scripted baseline; the postprovision hook discovers the same group via samples/.env."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "azd-env-name": "[parameters('environmentName')]"
+      }
+    }
+  ],
+  "outputs": {
+    "AZURE_RESOURCE_GROUP": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    },
+    "ACA_RESOURCE_GROUP": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    }
+  }
+}
