@@ -70,20 +70,20 @@ fi
 # or /usr/local/bin — pin both on PATH in the unit).
 COPILOT_PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
-# ---- 4. Launch listener under nohup -------------------------------------
-# Sandboxes don't run systemd ("'systemd' is not running in this
-# container due to its overhead"), so we can't use a systemd unit.
-# nohup is fine for a single long-lived process — sandbox lifecycle
-# is managed by the platform (it's restarted with the sandbox itself
-# when the OnDemand proxy wakes it), so we don't need auto-restart.
+# ---- 4. Launch listener as a detached process ---------------------------
+# Sandboxes don't run systemd. We use setsid to fully detach so the
+# listener survives the bootstrap exec session terminating (the
+# sandbox SDK's `exec` kills the entire process group on disconnect,
+# so a plain `nohup ... &` isn't enough — setsid puts the listener
+# in its own session and process group).
+#
+# Idempotent: kill any old instance first.
 
-# Kill any previous instance (idempotent re-run)
 pkill -f 'uvicorn listener:app' 2>/dev/null || true
 sleep 1
 
-# Write the env file the listener reads. We don't bake env into the
-# nohup command line because secrets would show up in /proc/N/cmdline.
-mkdir -p /opt/listener
+# Write the env file the listener reads.
+mkdir -p /opt/listener /var/log
 cat >/opt/listener/.env <<EOF
 SHAREPOINT_MCP_URL=${SHAREPOINT_MCP_URL}
 SHAREPOINT_SITE_URL=${SHAREPOINT_SITE_URL:-}
@@ -93,16 +93,23 @@ COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
 EOF
 chmod 600 /opt/listener/.env
 
-# Launch under nohup, log to /var/log/listener.log
+# Write the start script. We use this both at first bootstrap AND
+# any time we hot-reload the listener.
+cat >/opt/listener/start.sh <<'STARTEOF'
+#!/usr/bin/env bash
+set -e
+pkill -f 'uvicorn listener:app' 2>/dev/null || true
+sleep 1
 cd /opt/listener
-mkdir -p /var/log
-set -a
-# shellcheck disable=SC1091
-. /opt/listener/.env
-set +a
-export PATH="/opt/listener/.venv/bin:${COPILOT_PATH}"
-nohup /opt/listener/.venv/bin/uvicorn listener:app --host 0.0.0.0 --port 8080 \
-    >/var/log/listener.log 2>&1 &
+set -a; . /opt/listener/.env; set +a
+export PATH=/opt/listener/.venv/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+exec /opt/listener/.venv/bin/uvicorn listener:app --host 0.0.0.0 --port 8080 \
+    >>/var/log/listener.log 2>&1 </dev/null
+STARTEOF
+chmod +x /opt/listener/start.sh
+
+nohup setsid /opt/listener/start.sh >/var/log/listener.start.log 2>&1 < /dev/null &
+disown
 
 # ---- 5. Wait for /healthz before returning success ----------------------
 echo -e "${YELLOW}==> waiting for listener /healthz...${NC}"

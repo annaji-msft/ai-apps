@@ -120,13 +120,27 @@ async def trigger(request: Request) -> dict[str, Any]:
     slightly differently. We pass the whole blob to Copilot in the
     prompt so the model can navigate it.
     """
+    # Always log the raw body + content-type for diagnostics. The
+    # gateway sometimes sends a slightly different shape than we
+    # expect (e.g., wrapped in `triggerBody()` envelope, or empty
+    # for keep-alive pokes).
+    raw = await request.body()
+    ctype = request.headers.get("content-type", "<none>")
+    log.info("trigger POST: content-type=%s len=%d", ctype, len(raw))
+    if not raw:
+        log.warning("trigger POST: empty body — likely a gateway probe; acking 200")
+        return {"accepted": "empty"}
+    preview = raw[:1500].decode("utf-8", "replace")
+    log.info("trigger POST body preview:\n%s", preview)
     try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="invalid JSON body")
+        import json as _json
+        payload = _json.loads(raw)
+    except Exception as exc:
+        log.warning("trigger POST: JSON parse failed (%s); acking 200 so the gateway doesn't retry", exc)
+        return {"accepted": "non-json"}
 
     run_id = uuid.uuid4().hex[:8]
-    log.info("[%s] trigger received: keys=%s", run_id, sorted(payload.keys())[:12])
+    log.info("[%s] trigger received: top-level keys=%s", run_id, sorted(payload.keys())[:12] if isinstance(payload, dict) else f"<{type(payload).__name__}>")
 
     task = asyncio.create_task(_process_one(payload, run_id))
     _inflight.add(task)
@@ -142,6 +156,27 @@ async def _process_one(file_props: dict[str, Any], run_id: str) -> None:
     delivers a batch) don't trample each other. The agent is told to
     confine its file I/O to that workspace.
     """
+    # Self-loop guard: the gateway also fires for the JSON files
+    # WE upload to the /Extracted folder. Skip anything whose path
+    # is inside the output folder or whose name ends with `.json`
+    # (our own results). Check the common SharePoint path fields.
+    out_folder = (SHAREPOINT_OUTPUT_FOLDER or "Extracted").strip("/")
+    file_ref = str(file_props.get("FileRef", "") or "")
+    identifier = str(file_props.get("{Identifier}", "") or "")
+    leaf = str(file_props.get("FileLeafRef", "") or "")
+    is_own_output = (
+        f"/{out_folder}/" in file_ref
+        or f"%252f{out_folder}%252f" in identifier  # url-encoded
+        or f"%2f{out_folder}%2f" in identifier
+        or leaf.lower().endswith(".json")
+    )
+    if is_own_output:
+        log.info(
+            "[%s] skipping file (recognized as our own output / in %s folder): leaf=%r ref=%r",
+            run_id, out_folder, leaf, file_ref[:120],
+        )
+        return
+
     workspace = Path("/work") / run_id
     workspace.mkdir(parents=True, exist_ok=True)
     try:
@@ -169,13 +204,29 @@ async def _process_one(file_props: dict[str, Any], run_id: str) -> None:
 
 def _render_prompt(file_props: dict[str, Any], run_id: str, workspace: Path) -> str:
     sharepoint_target = ""
-    if SHAREPOINT_SITE_URL and SHAREPOINT_LIBRARY_ID:
+    if SHAREPOINT_SITE_URL:
+        # Split site URL into hostname + server-relative path so the
+        # prompt can show the agent exactly what to feed getSiteByPath.
+        from urllib.parse import urlparse
+        u = urlparse(SHAREPOINT_SITE_URL)
+        host = u.netloc
+        srv_path = u.path.lstrip("/")
         sharepoint_target = (
-            "\n\nWhen calling SharePoint MCP tools, use these IDs "
-            "(do NOT try to discover them — they are configured):\n"
-            f"  site URL:        {SHAREPOINT_SITE_URL}\n"
-            f"  library/list ID: {SHAREPOINT_LIBRARY_ID}\n"
-            f"  output folder:   {SHAREPOINT_OUTPUT_FOLDER}\n"
+            "\n"
+            f"- site URL:        {SHAREPOINT_SITE_URL}\n"
+            f"  hostname:        {host}\n"
+            f"  serverRelative:  {srv_path}\n"
+        )
+        if SHAREPOINT_LIBRARY_ID:
+            sharepoint_target += (
+                f"- library list ID (from trigger): {SHAREPOINT_LIBRARY_ID}\n"
+                "  (this is the SharePoint LIST id; the MCP tools want the\n"
+                "   DRIVE id which you get from listDocumentLibrariesInSite — pick\n"
+                "   whichever document library matches your scenario, typically\n"
+                "   the first or only one in the site if this site has just one.)\n"
+            )
+        sharepoint_target += (
+            f"- output folder:   {SHAREPOINT_OUTPUT_FOLDER}\n"
         )
     file_props_pretty = _safe_pretty(file_props, max_chars=4000)
     return PROMPT_TEMPLATE.format(
