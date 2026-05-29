@@ -76,12 +76,6 @@ ADC_PROXY_HOST_TEMPLATE = "{sandbox_id}--{port}.{region}.adcproxy.io"
 # sandbox via the proxy. From the HAR.
 ADC_PROXY_AUDIENCE = "https://auth.adcproxy.io/"
 
-CONNECTOR_NS_EXT_WHEEL = (
-    "https://github.com/anthonychu/azure-cli-extensions/releases"
-    "/download/connector-namespace-0.1.0"
-    "/connector_namespace-0.1.0-py2.py3-none-any.whl"
-)
-
 # GitHub host families Copilot CLI talks to — mirror scenario 10.
 GITHUB_TRANSFORM_HOSTS = (
     ("api.github.com",                         "token",  "github-api-auth"),
@@ -496,31 +490,166 @@ def step_create_trigger(cfg: dict[str, Any], sandbox_id: str, callback_url: str)
     log.info("    trigger config: %s (poll every 10s)", trigger_name)
 
 
+def _connection_arm_base(cfg: dict[str, Any], connection_name: str) -> str:
+    return (
+        f"https://management.azure.com/subscriptions/{cfg['AZURE_SUBSCRIPTION_ID']}"
+        f"/resourceGroups/{cfg['resourceGroupName']}"
+        f"/providers/Microsoft.Web/connectorGateways/{cfg['connectorGatewayName']}"
+        f"/connections/{connection_name}"
+    )
+
+
+def _connection_status(cfg: dict[str, Any], connection_name: str) -> str:
+    """Returns the overallStatus of a connection, or '' if it can't be read."""
+    try:
+        r = az_rest(
+            "get",
+            f"{_connection_arm_base(cfg, connection_name)}?api-version={CONNECTOR_GATEWAY_API_VERSION}",
+        )
+        return (r.get("properties", {}).get("overallStatus") or "").strip()
+    except SystemExit:
+        return ""
+
+
+def _authorize_one_connection(cfg: dict[str, Any], connection_name: str, label: str) -> None:
+    """Run the official 2-step OAuth consent flow:
+
+        1. POST .../connections/<name>/listConsentLinks  → { link, ... }
+        2. open `link` in the user's browser
+        3. browser redirects to http://localhost:<random>/callback?code=...
+        4. POST .../connections/<name>/confirmConsentCode { code, objectId, tenantId }
+
+    Replaces the previous dependency on the unofficial
+    `connector-namespace` az CLI extension. Uses only `az rest` (for
+    ARM auth/data plane), the stdlib http.server (for the loopback
+    redirect catcher), and `webbrowser.open` (for the consent tab).
+    """
+    log.info("    %s (%s)", label, connection_name)
+
+    if _connection_status(cfg, connection_name).lower() == "connected":
+        log.info("      already Connected; skipping consent flow")
+        return
+
+    # 1. Operator identity (objectId of the user running azd up).
+    me = az_json("ad", "signed-in-user", "show", "--query", "id")
+    if not me:
+        log.warning("      could not resolve signed-in user objectId; skipping")
+        return
+    object_id = me if isinstance(me, str) else str(me)
+    tenant_id = cfg["tenantId"]
+
+    # 2. Loopback redirect listener. The OAuth dance redirects here
+    # with the consent code in the query string. We capture it and
+    # show a friendly page so the user knows they can close the tab.
+    import http.server
+    import socketserver
+    import threading
+    import urllib.parse
+    import webbrowser
+
+    captured: dict[str, str | None] = {"code": None, "error": None}
+
+    class _CallbackHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            qs = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(qs)
+            if "code" in params:
+                captured["code"] = params["code"][0]
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    b"<html><body style=\"font-family:system-ui;padding:2em;\">"
+                    b"<h2 style=\"color:#107C10\">\u2713 Consent captured</h2>"
+                    b"<p>You can close this tab. Back to your terminal.</p>"
+                    b"</body></html>"
+                )
+            else:
+                captured["error"] = params.get("error_description", [params.get("error", ["unknown"])[0]])[0]
+                self.send_response(400)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(f"consent flow failed: {captured['error']}".encode())
+
+        def log_message(self, *args, **kwargs) -> None:  # silence stdlib chatter
+            return
+
+    server = socketserver.TCPServer(("127.0.0.1", 0), _CallbackHandler)
+    port = server.server_address[1]
+    redirect_url = f"http://localhost:{port}/callback"
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+
+    try:
+        # 3. Ask the namespace for a consent link bound to our loopback.
+        arm_base = _connection_arm_base(cfg, connection_name)
+        link_resp = az_rest(
+            "post",
+            f"{arm_base}/listConsentLinks?api-version={CONNECTOR_GATEWAY_API_VERSION}",
+            body={
+                "parameters": [{
+                    "objectId": object_id,
+                    "parameterName": "token",
+                    "redirectUrl": redirect_url,
+                    "tenantId": tenant_id,
+                }],
+            },
+        )
+        if not link_resp or not link_resp.get("value"):
+            log.warning("      listConsentLinks returned no links; skipping")
+            return
+        link = link_resp["value"][0].get("link")
+        if not link:
+            log.warning("      listConsentLinks returned no `link` field; skipping")
+            return
+
+        log.info("      opening browser for OAuth consent…")
+        log.info("      (if no tab opens, paste this URL manually:\n         %s)", link)
+        try:
+            webbrowser.open(link)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("      webbrowser.open failed (%s); paste the link manually", exc)
+
+        # 4. Wait up to 5 min for the user to complete consent.
+        import time as _time
+        deadline = _time.time() + 300
+        while captured["code"] is None and captured["error"] is None and _time.time() < deadline:
+            _time.sleep(1)
+        if captured["error"]:
+            log.warning("      consent failed: %s", captured["error"])
+            return
+        if captured["code"] is None:
+            log.warning("      timed out waiting for consent (5 min); skipping")
+            return
+
+        # 5. Exchange the consent code for stored credentials.
+        az_rest(
+            "post",
+            f"{arm_base}/confirmConsentCode?api-version={CONNECTOR_GATEWAY_API_VERSION}",
+            body={
+                "code": captured["code"],
+                "objectId": object_id,
+                "tenantId": tenant_id,
+            },
+        )
+        log.info("      \u2713 %s authenticated", connection_name)
+    finally:
+        try:
+            server.shutdown()
+        except Exception:
+            pass
+
+
 def step_authorize_connections(cfg: dict[str, Any]) -> None:
     log.info("==> [9/9] authorizing connections (browser tabs)")
-    # Install connector-namespace ext if missing
-    show = subprocess.run(
-        [_AZ, "extension", "show", "--name", "connector-namespace"],
-        capture_output=True, text=True, check=False,
-    )
-    if show.returncode != 0:
-        log.info("    installing 'connector-namespace' az CLI extension")
-        subprocess.run(
-            [_AZ, "extension", "add", "--source", CONNECTOR_NS_EXT_WHEEL, "--yes"],
-            check=True,
-        )
-
     for conn_name, label in (
         (cfg["sharepointConnectionName"], "SharePoint Online (trigger)"),
         (cfg["sharepointMcpConnectionName"], "SharePoint MCP (sandbox -> SP)"),
     ):
-        log.info("    authorizing %s (%s)", label, conn_name)
-        subprocess.run([
-            _AZ, "connector-namespace", "connection", "authorize",
-            "--resource-group", cfg["resourceGroupName"],
-            "--namespace-name", cfg["connectorGatewayName"],
-            "--name", conn_name,
-        ], check=False)  # don't hard-fail; operator may have cancelled the browser
+        try:
+            _authorize_one_connection(cfg, conn_name, label)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("    %s: authorization failed (%s); continuing", conn_name, exc)
 
 
 def step_summary(cfg: dict[str, Any], sandbox_id: str, callback_url: str) -> None:

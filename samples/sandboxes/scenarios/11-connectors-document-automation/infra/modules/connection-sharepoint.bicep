@@ -16,7 +16,9 @@
 //                            content and upload extracted results.
 //
 // OAuth consent is completed once at deploy time by the post-deploy
-// script (`az connector-namespace connection authorize`). Bicep just
+// script (drives the official `listConsentLinks` +
+// `confirmConsentCode` ARM APIs with a loopback redirect listener).
+// Bicep just
 // declares the connection; the OAuth dance happens out-of-band.
 
 @description('Parent Connector Namespace resource name.')

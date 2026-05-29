@@ -12,7 +12,8 @@
 // upload, etc.) is published by the upstream server via tools/list.
 //
 // OAuth consent is completed once out-of-band by the post-deploy
-// script (`az connector-namespace connection authorize`).
+// script (drives the official `listConsentLinks` +
+// `confirmConsentCode` ARM APIs with a loopback redirect listener).
 
 @description('Parent Connector Namespace resource name.')
 param gatewayName string

@@ -192,7 +192,8 @@ audience-scoped:
    Transform rule is dropped by the Deny default.
 3. **MCP → SharePoint** — the upstream `workiqsharepoint` MCP
    server uses the connection's OAuth token (acquired once at deploy
-   via `az connector-namespace connection authorize`) to call
+   via the official `listConsentLinks` + `confirmConsentCode` ARM
+   APIs that postdeploy.py drives) to call
    Microsoft Graph. The token never leaves the namespace's runtime.
 
 The sandbox holds **no SharePoint credential, no MCP API key**.
