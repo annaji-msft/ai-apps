@@ -172,6 +172,7 @@ def step_resolve_inputs() -> dict[str, Any]:
     # Operator-supplied via `azd env set`
     out.setdefault("SHAREPOINT_SITE_URL", "")
     out.setdefault("SHAREPOINT_LIBRARY_ID", "")
+    out.setdefault("SHAREPOINT_INPUT_FOLDER", "")          # empty = process whole library
     out.setdefault("SHAREPOINT_OUTPUT_FOLDER", "Extracted")
     out.setdefault("GITHUB_PAT", "")
     return out
@@ -355,6 +356,7 @@ def step_run_bootstrap(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
             "SHAREPOINT_MCP_URL": mcp_url,
             "SHAREPOINT_SITE_URL": cfg.get("SHAREPOINT_SITE_URL", ""),
             "SHAREPOINT_LIBRARY_ID": cfg.get("SHAREPOINT_LIBRARY_ID", ""),
+            "SHAREPOINT_INPUT_FOLDER": cfg.get("SHAREPOINT_INPUT_FOLDER", ""),
             "SHAREPOINT_OUTPUT_FOLDER": cfg.get("SHAREPOINT_OUTPUT_FOLDER", "Extracted"),
             "COPILOT_GITHUB_TOKEN": cfg.get("GITHUB_PAT", ""),
         }.items()
@@ -470,7 +472,7 @@ def step_create_trigger(cfg: dict[str, Any], sandbox_id: str, callback_url: str)
             "notificationDetails": {
                 "callbackUrl": callback_url,
                 "httpMethod": "POST",
-                "body": "@{triggerBody()?['dynamicProperties']}",
+                "body": "@triggerBody()",
                 "authentication": {
                     "type": "ManagedServiceIdentity",
                     "audience": ADC_PROXY_AUDIENCE,

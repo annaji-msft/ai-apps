@@ -139,13 +139,24 @@ cd samples/sandboxes/scenarios/11-connectors-document-automation
 azd env set GITHUB_PAT <ghp_...>
 azd env set SHAREPOINT_SITE_URL 'https://contoso.sharepoint.com/teams/Finance'
 azd env set SHAREPOINT_LIBRARY_ID '<library-guid>'         # GUID from SP REST API
-azd env set SHAREPOINT_OUTPUT_FOLDER 'Extracted'           # default
+
+# Optional folder scoping (default: process entire library, write to /Extracted)
+azd env set SHAREPOINT_INPUT_FOLDER 'testinvoices/inbound'    # only process files here
+azd env set SHAREPOINT_OUTPUT_FOLDER 'testinvoices/extracted' # write results here
 
 # Optional: where to run the sandbox group (defaults to westus2)
 azd env set ACA_SANDBOX_REGION westus2
 
 azd up
 ```
+
+The trigger config itself fires for every new file in the library
+(SharePoint Online's `GetOnNewFileItems` has no folder filter; the
+folder-scoped ops are deprecated). The listener filters server-side:
+
+- skip anything outside `SHAREPOINT_INPUT_FOLDER` (when set)
+- skip anything inside `SHAREPOINT_OUTPUT_FOLDER` (self-loop guard)
+- skip anything whose name ends with `.json`
 
 Post-deploy will:
 1. Resolve the SharePoint MCP runtime URL from the gateway.

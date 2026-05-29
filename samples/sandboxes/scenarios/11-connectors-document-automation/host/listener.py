@@ -66,7 +66,17 @@ SHAREPOINT_MCP_URL = os.environ["SHAREPOINT_MCP_URL"]
 # to guess. Both passed in as plain env vars at bootstrap time.
 SHAREPOINT_SITE_URL = os.environ.get("SHAREPOINT_SITE_URL", "").strip()
 SHAREPOINT_LIBRARY_ID = os.environ.get("SHAREPOINT_LIBRARY_ID", "").strip()
-SHAREPOINT_OUTPUT_FOLDER = os.environ.get("SHAREPOINT_OUTPUT_FOLDER", "Extracted").strip()
+
+# Input folder: only files whose path is inside this folder will be
+# processed. The trigger fires for everything in the library (the
+# `GetOnNewFileItems` operation has no folder filter; the
+# folder-scoped operations OnNewFile / OnUpdatedFile are deprecated).
+# Setting this to "" disables the input filter (process all files).
+SHAREPOINT_INPUT_FOLDER = os.environ.get("SHAREPOINT_INPUT_FOLDER", "").strip().strip("/")
+
+# Output folder: results go here. Self-loop guard also keys off this
+# so we don't re-process the JSONs we ourselves upload.
+SHAREPOINT_OUTPUT_FOLDER = os.environ.get("SHAREPOINT_OUTPUT_FOLDER", "Extracted").strip().strip("/")
 
 # Copilot CLI MUST have a GitHub credential in its env before it
 # attempts any network call (see scenario 10 notes — its auth error
@@ -161,57 +171,61 @@ async def _process_one(file_props: dict[str, Any], run_id: str) -> None:
     delivers a batch) don't trample each other. The agent is told to
     confine its file I/O to that workspace.
     """
-    # Self-loop guard: the gateway also fires for the JSON files
-    # WE upload to the /Extracted folder. Skip anything whose path
-    # is inside the output folder or whose name ends with `.json`
-    # (our own results). Check the common SharePoint path fields.
-    out_folder = (SHAREPOINT_OUTPUT_FOLDER or "Extracted").strip("/")
     file_ref = str(file_props.get("FileRef", "") or "")
     identifier = str(file_props.get("{Identifier}", "") or "")
     leaf = str(file_props.get("FileLeafRef", "") or "")
+
+    # Self-loop guard: the gateway fires for the JSONs WE upload to
+    # the output folder. Skip anything whose path is inside the output
+    # folder or whose name ends with `.json`.
+    out_folder = (SHAREPOINT_OUTPUT_FOLDER or "Extracted").strip("/")
     is_own_output = (
         f"/{out_folder}/" in file_ref
-        or f"%252f{out_folder}%252f" in identifier  # url-encoded
-        or f"%2f{out_folder}%2f" in identifier
+        or f"%252f{out_folder.replace('/', '%252f')}%252f" in identifier
+        or f"%2f{out_folder.replace('/', '%2f')}%2f" in identifier
         or leaf.lower().endswith(".json")
     )
     if is_own_output:
         log.info(
-            "[%s] skipping file (recognized as our own output / in %s folder): leaf=%r ref=%r",
+            "[%s] skipping (own output / in %s folder): leaf=%r ref=%r",
             run_id, out_folder, leaf, file_ref[:120],
         )
         return
+
+    # Input-folder filter: when set, only process files whose path is
+    # inside this folder. The trigger has no folder param so we filter
+    # post-hoc here. Empty/unset = process everything in the library.
+    if SHAREPOINT_INPUT_FOLDER:
+        in_folder = SHAREPOINT_INPUT_FOLDER.strip("/")
+        in_match = (
+            f"/{in_folder}/" in file_ref
+            or f"%252f{in_folder.replace('/', '%252f')}%252f" in identifier
+            or f"%2f{in_folder.replace('/', '%2f')}%2f" in identifier
+        )
+        if not in_match:
+            log.info(
+                "[%s] skipping (not in input folder %s): leaf=%r ref=%r",
+                run_id, in_folder, leaf, file_ref[:120],
+            )
+            return
 
     workspace = Path("/work") / run_id
     workspace.mkdir(parents=True, exist_ok=True)
     try:
         prompt = _render_prompt(file_props, run_id, workspace)
         (workspace / "prompt.md").write_text(prompt, encoding="utf-8")
-
-        # Drop the MCP config inside the workspace so the prompt can
-        # `cd` into the workspace and run copilot — Copilot v1 reads
-        # `./.mcp.json` (workspace-level) in addition to its global
-        # ~/.copilot/mcp-config.json. We use the workspace-level file
-        # so each run can theoretically swap MCP servers in/out without
-        # touching global config.
         _write_mcp_config(workspace)
-
         await _run_copilot(workspace, run_id)
         log.info("[%s] done", run_id)
     except Exception as exc:  # noqa: BLE001
         log.exception("[%s] processing failed: %s", run_id, exc)
     finally:
-        # Best-effort cleanup. Leave the prompt + result files on
-        # disk for ~hours so an operator can inspect after the fact;
-        # a future cleanup loop can prune /work/* older than N hours.
         pass
 
 
 def _render_prompt(file_props: dict[str, Any], run_id: str, workspace: Path) -> str:
     sharepoint_target = ""
     if SHAREPOINT_SITE_URL:
-        # Split site URL into hostname + server-relative path so the
-        # prompt can show the agent exactly what to feed getSiteByPath.
         from urllib.parse import urlparse
         u = urlparse(SHAREPOINT_SITE_URL)
         host = u.netloc
@@ -230,8 +244,12 @@ def _render_prompt(file_props: dict[str, Any], run_id: str, workspace: Path) -> 
                 "   whichever document library matches your scenario, typically\n"
                 "   the first or only one in the site if this site has just one.)\n"
             )
+        if SHAREPOINT_INPUT_FOLDER:
+            sharepoint_target += (
+                f"- input folder (the file you're processing is inside): {SHAREPOINT_INPUT_FOLDER}\n"
+            )
         sharepoint_target += (
-            f"- output folder:   {SHAREPOINT_OUTPUT_FOLDER}\n"
+            f"- output folder (where to upload your result):           {SHAREPOINT_OUTPUT_FOLDER}\n"
         )
     file_props_pretty = _safe_pretty(file_props, max_chars=4000)
     return PROMPT_TEMPLATE.format(
