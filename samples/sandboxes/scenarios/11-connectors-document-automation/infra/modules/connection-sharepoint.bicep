@@ -3,7 +3,7 @@
 // SharePoint Online connection used by the trigger config
 // (`operationName: 'GetOnNewFileItems'` on `sharepointonline`).
 //
-// SharePoint shows up in this gateway TWICE under two different
+// SharePoint shows up in this namespace TWICE under two different
 // connector slugs that need separate connections + separate OAuth
 // consents (per scenario 10's similar Office365 / a365teamsmcp split):
 //
@@ -19,7 +19,7 @@
 // script (`az connector-namespace connection authorize`). Bicep just
 // declares the connection; the OAuth dance happens out-of-band.
 
-@description('Parent Connector Gateway resource name.')
+@description('Parent Connector Namespace resource name.')
 param gatewayName string
 
 @description('Name for the connection (2-64 chars, alphanumeric + hyphen + underscore).')

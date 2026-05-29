@@ -1,10 +1,10 @@
 // sandbox-group.bicep
 //
 // Microsoft.App/sandboxGroups — the parent resource that holds the
-// long-lived "host" sandbox the Connector Gateway trigger posts to.
+// long-lived "host" sandbox the Connector Namespace trigger posts to.
 //
 // In scenario 11, the sandbox itself is the webhook target — there
-// is no receiver Container App. The Connector Gateway's MI gets
+// is no receiver Container App. The Connector Namespace's MI gets
 // "Container Apps SandboxGroup Data Owner" on this group so the ADC
 // proxy can wake the host sandbox on every trigger (sandbox is
 // registered with `activationMode: OnDemand` on its exposed port).

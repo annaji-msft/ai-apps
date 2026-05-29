@@ -2,19 +2,19 @@
 //
 // Connection of type `workiqsharepoint` (Work IQ SharePoint MCP,
 // preview). Same pattern as scenario 10's connection-teams.bicep:
-// the gateway exposes SharePoint AI-style capabilities via a
+// the namespace exposes SharePoint AI-style capabilities via a
 // managed MCP backend, accessed through this connection.
 //
 // Once the matching mcpserverConfig (kind=ManagedMcpServer) is
-// provisioned, the sandbox calls the gateway's published MCP URL
-// and the gateway proxies JSON-RPC traffic to the upstream Work IQ
+// provisioned, the sandbox calls the namespace's published MCP URL
+// and the namespace proxies JSON-RPC traffic to the upstream Work IQ
 // SharePoint MCP server. Tool catalog (list files, get content,
 // upload, etc.) is published by the upstream server via tools/list.
 //
 // OAuth consent is completed once out-of-band by the post-deploy
 // script (`az connector-namespace connection authorize`).
 
-@description('Parent Connector Gateway resource name.')
+@description('Parent Connector Namespace resource name.')
 param gatewayName string
 
 @description('Name for the connection (2-64 chars).')

@@ -1,23 +1,23 @@
 # Azure Developer CLI project for sandboxes-connectors-document-automation.
 #
 # Unlike scenario 10, there is NO ACA receiver, NO Container Registry,
-# NO Dockerfile, NO `azd deploy` step. The Connector Gateway's trigger
+# NO Dockerfile, NO `azd deploy` step. The Connector Namespace's trigger
 # calls the sandbox directly via the ACA Dev Compute proxy — the
 # sandbox IS the webhook target.
 #
 # `azd up` from this directory:
 #
-#   1. provisions the gateway, the SharePoint connection, the
+#   1. provisions the namespace, the SharePoint connection, the
 #      SharePoint MCP server config, the sandbox group, and the RBAC
-#      grant from gateway MI -> sandbox group (`infra/main.bicep`)
+#      grant from namespace MI -> sandbox group (`infra/main.bicep`)
 #   2. runs the post-deploy script that:
 #      a. creates the host sandbox in the sandbox group
 #      b. uploads the listener code + bootstrap.sh into the sandbox
 #      c. runs bootstrap.sh (installs poppler/tesseract/copilot,
 #         starts uvicorn on :8080 as a long-lived process)
 #      d. registers port 8080 with the ADC proxy + restricts callers
-#         via Entra to the gateway MI's principalId
-#      e. creates the trigger config pointing the gateway at
+#         via Entra to the namespace MI's principalId
+#      e. creates the trigger config pointing the namespace at
 #         https://<sbxId>--8080.<region>.adcproxy.io
 #      f. runs OAuth consent for the SharePoint connection
 #

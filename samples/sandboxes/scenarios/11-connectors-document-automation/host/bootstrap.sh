@@ -14,7 +14,7 @@
 # this — they end up written to /opt/listener/.env which the listener
 # loads at start-up; secrets stay out of /proc/N/cmdline):
 #
-#   SHAREPOINT_MCP_URL       full HTTPS URL of the gateway-fronted MCP
+#   SHAREPOINT_MCP_URL       full HTTPS URL of the namespace-fronted MCP
 #   SHAREPOINT_SITE_URL      e.g. https://contoso.sharepoint.com/teams/Finance
 #   SHAREPOINT_LIBRARY_ID    GUID of the SharePoint library
 #   SHAREPOINT_OUTPUT_FOLDER folder name within the library for results

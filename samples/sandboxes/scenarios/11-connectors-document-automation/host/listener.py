@@ -1,9 +1,9 @@
 """host_listener — FastAPI app running inside the host sandbox.
 
-The Connector Gateway's "When a file is created (properties only)"
+The Connector Namespace's "When a file is created (properties only)"
 trigger POSTs directly to this listener (via the ADC proxy URL
 ``https://<sandboxId>--8080.<region>.adcproxy.io``). The proxy has
-already validated that the caller is the gateway MI; we trust the
+already validated that the caller is the namespace MI; we trust the
 trust boundary at the proxy and just process the payload.
 
 Per request (one SharePoint file event):
@@ -13,7 +13,7 @@ Per request (one SharePoint file event):
      ``@triggerBody()`` so we get the full property bag (ID,
      FileLeafRef, FileRef, ``{Identifier}``, Editor, etc.).
   2. Apply the self-loop guard — skip anything in the output
-     folder or with a ``.json`` extension, since the gateway also
+     folder or with a ``.json`` extension, since the namespace also
      fires for files we ourselves upload to /Extracted.
   3. Allocate a fresh per-run workspace at ``/work/<run-id>/``.
   4. Build a prompt that walks Copilot CLI through the SharePoint
@@ -25,8 +25,8 @@ Per request (one SharePoint file event):
        e. extract via ``pdftotext`` / ``tesseract`` / fresh Python
        f. ``createSmallTextFile`` → upload result JSON to /Extracted
   5. Run Copilot CLI non-interactively with the prompt.
-  6. Return 200 to the gateway. Long-running work happens in a
-     background task; we ack fast so the gateway doesn't retry.
+  6. Return 200 to the namespace. Long-running work happens in a
+     background task; we ack fast so the namespace doesn't retry.
 
 Egress: the sandbox's egress policy (applied at boot by the
 post-deploy script) is deny-default + Transform rules that stamp
@@ -56,9 +56,9 @@ log = logging.getLogger("listener")
 
 # ---- Configuration (populated by bootstrap.sh via env) ----------------------
 
-# The runtime URL of the SharePoint MCP server on the gateway. Set
+# The runtime URL of the SharePoint MCP server on the namespace. Set
 # at sandbox-bootstrap time by the post-deploy script (which reads it
-# from the mcpserverConfig data plane after the gateway is provisioned).
+# from the mcpserverConfig data plane after the namespace is provisioned).
 SHAREPOINT_MCP_URL = os.environ["SHAREPOINT_MCP_URL"]
 
 # The SharePoint document library / folder where extracted result
@@ -92,7 +92,7 @@ PROMPT_TEMPLATE = Path(__file__).with_name("prompt.md").read_text(encoding="utf-
 app = FastAPI(title="sandboxes-connectors-document-automation listener")
 
 # Background tasks. Same pattern as scenario 10's receiver — we ack
-# the gateway fast so it doesn't retry, then do the long-running work
+# the namespace fast so it doesn't retry, then do the long-running work
 # in a task. Keep a set so the asyncio task isn't GC'd prematurely.
 _inflight: set[asyncio.Task[Any]] = set()
 
@@ -116,7 +116,7 @@ def healthz() -> Response:
 @app.post("/")
 @app.post("/trigger")
 async def trigger(request: Request) -> dict[str, Any]:
-    """Entry point for the Connector Gateway trigger.
+    """Entry point for the Connector Namespace trigger.
 
     The trigger config's `notificationDetails.body` is
     ``@{triggerBody()?['dynamicProperties']}``, so the body here is
@@ -136,14 +136,14 @@ async def trigger(request: Request) -> dict[str, Any]:
     prompt so the model can navigate it.
     """
     # Always log the raw body + content-type for diagnostics. The
-    # gateway sometimes sends a slightly different shape than we
+    # namespace sometimes sends a slightly different shape than we
     # expect (e.g., wrapped in `triggerBody()` envelope, or empty
     # for keep-alive pokes).
     raw = await request.body()
     ctype = request.headers.get("content-type", "<none>")
     log.info("trigger POST: content-type=%s len=%d", ctype, len(raw))
     if not raw:
-        log.warning("trigger POST: empty body — likely a gateway probe; acking 200")
+        log.warning("trigger POST: empty body — likely a namespace probe; acking 200")
         return {"accepted": "empty"}
     preview = raw[:1500].decode("utf-8", "replace")
     log.info("trigger POST body preview:\n%s", preview)
@@ -151,7 +151,7 @@ async def trigger(request: Request) -> dict[str, Any]:
         import json as _json
         payload = _json.loads(raw)
     except Exception as exc:
-        log.warning("trigger POST: JSON parse failed (%s); acking 200 so the gateway doesn't retry", exc)
+        log.warning("trigger POST: JSON parse failed (%s); acking 200 so the namespace doesn't retry", exc)
         return {"accepted": "non-json"}
 
     run_id = uuid.uuid4().hex[:8]
@@ -167,7 +167,7 @@ async def trigger(request: Request) -> dict[str, Any]:
 async def _process_one(file_props: dict[str, Any], run_id: str) -> None:
     """Run Copilot CLI against this one file's properties.
 
-    Workspace is /work/<run-id>/ so concurrent runs (if the gateway
+    Workspace is /work/<run-id>/ so concurrent runs (if the namespace
     delivers a batch) don't trample each other. The agent is told to
     confine its file I/O to that workspace.
     """
@@ -175,7 +175,7 @@ async def _process_one(file_props: dict[str, Any], run_id: str) -> None:
     identifier = str(file_props.get("{Identifier}", "") or "")
     leaf = str(file_props.get("FileLeafRef", "") or "")
 
-    # Self-loop guard: the gateway fires for the JSONs WE upload to
+    # Self-loop guard: the namespace fires for the JSONs WE upload to
     # the output folder. Skip anything whose path is inside the output
     # folder or whose name ends with `.json`.
     out_folder = (SHAREPOINT_OUTPUT_FOLDER or "Extracted").strip("/")
@@ -265,7 +265,7 @@ def _write_mcp_config(workspace: Path) -> None:
     # (workspace-level) and `~/.copilot/mcp-config.json` (user-level).
     # We write the workspace-level file to keep each run self-contained.
     # Top-level key is `mcpServers` (camelCase). The egress proxy adds
-    # X-API-Key on the way out so the URL here is the bare gateway URL.
+    # X-API-Key on the way out so the URL here is the bare namespace URL.
     mcp_json = (
         '{\n'
         '  "mcpServers": {\n'

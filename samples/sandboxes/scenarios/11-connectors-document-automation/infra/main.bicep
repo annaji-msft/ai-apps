@@ -2,15 +2,15 @@
 //
 // Provisions (in order):
 //
-//   1. Connector Gateway (SystemAssigned MI)
+//   1. Connector Namespace (SystemAssigned MI)
 //   2. SharePoint Online connection (classic — for the trigger)
 //   3. SharePoint MCP connection (workiqsharepoint — for the
 //      sandbox to read/write files inside SharePoint)
 //   4. SharePoint Managed MCP server config (publishes the Work IQ
-//      SharePoint MCP server's tool catalog on a gateway-published
+//      SharePoint MCP server's tool catalog on a namespace-published
 //      MCP HTTP endpoint, accessed by the sandbox)
 //   5. Sandbox group (SystemAssigned MI)
-//   6. RBAC: Connector Gateway MI -> "Container Apps SandboxGroup
+//   6. RBAC: Connector Namespace MI -> "Container Apps SandboxGroup
 //      Data Owner" on the sandbox group
 //
 // Everything else (the host sandbox itself, the port registration on
@@ -29,7 +29,7 @@ targetScope = 'resourceGroup'
 @maxLength(32)
 param environmentName string
 
-@description('Azure region for the Connector Gateway. Must be a gateway preview region (currently only westcentralus).')
+@description('Azure region for the Connector Namespace. Must be a Connector Namespaces preview region (currently only westcentralus).')
 param location string = resourceGroup().location
 
 @description('Azure region for the sandbox group. Must be a region where ACA sandboxes are available (e.g., westus2). Can differ from `location`.')
@@ -52,8 +52,8 @@ var sharepointMcpConnectionName = 'spmcp-${resourceToken}'
 var sharepointMcpServerConfigName = 'spmcp-${resourceToken}'
 var sandboxGroupName = 'sg-docauto-${resourceToken}'
 
-// ---- 1. Connector Gateway -------------------------------------------------
-module gateway 'modules/connector-gateway.bicep' = {
+// ---- 1. Connector Namespace -------------------------------------------------
+module gateway 'modules/connector-namespace.bicep' = {
   name: 'gateway'
   params: {
     name: connectorGatewayName
@@ -100,8 +100,8 @@ module sandboxGroup 'modules/sandbox-group.bicep' = {
   }
 }
 
-// ---- 6. RBAC: Gateway MI + operator -> Sandbox Group Data Owner --------
-module gatewaySandboxRbac 'modules/gateway-sandbox-rbac.bicep' = {
+// ---- 6. RBAC: Namespace MI + operator -> Sandbox Group Data Owner ----
+module gatewaySandboxRbac 'modules/namespace-sandbox-rbac.bicep' = {
   name: 'gateway-sandbox-rbac'
   params: {
     sandboxGroupName: sandboxGroup.outputs.name
@@ -112,13 +112,13 @@ module gatewaySandboxRbac 'modules/gateway-sandbox-rbac.bicep' = {
 
 // ---- Outputs the post-deploy script consumes ---------------------------
 
-@description('Connector Gateway resource ID. Post-deploy uses this to call listApiKey, create the trigger config, and read the gateway MI principalId.')
+@description('Connector Namespace resource ID. Post-deploy uses this to call listApiKey, create the trigger config, and read the namespace MI principalId.')
 output connectorGatewayId string = gateway.outputs.id
 
-@description('Connector Gateway name.')
+@description('Connector Namespace name.')
 output connectorGatewayName string = gateway.outputs.name
 
-@description('Connector Gateway SystemAssigned MI principalId. Goes into the sandbox port allowlist (Entra objectIds).')
+@description('Connector Namespace SystemAssigned MI principalId. Goes into the sandbox port allowlist (Entra objectIds).')
 output gatewayPrincipalId string = gateway.outputs.principalId
 
 @description('SharePoint Online connection name (post-deploy generates the consent URL).')

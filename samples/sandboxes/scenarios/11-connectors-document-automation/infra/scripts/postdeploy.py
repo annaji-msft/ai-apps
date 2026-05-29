@@ -7,10 +7,10 @@ where appropriate.
 
 Steps (idempotent — re-running is safe):
 
-  1.  Read azd outputs (subscription, RG, gateway, MCP config,
+  1.  Read azd outputs (subscription, RG, namespace, MCP config,
       sandbox group, plus the operator-supplied SHAREPOINT_* and
       GITHUB_PAT env values).
-  2.  Resolve the SharePoint MCP runtime URL from the gateway
+  2.  Resolve the SharePoint MCP runtime URL from the namespace
       data plane.
   3.  Create or reuse the host sandbox in the sandbox group
       (we tag it `scenario=connectors-document-automation,
@@ -26,9 +26,9 @@ Steps (idempotent — re-running is safe):
       toolchain + starts uvicorn on :8080 as a detached process
       (sandboxes don't run systemd; we use nohup+setsid).
   7.  Register port 8080 with the ADC proxy: PUT /ports with
-      `auth.entraId.objectIds = [<gateway MI principalId>]` so the
-      gateway is the only caller the proxy will allow.
-  8.  Create or update the gateway trigger config — callbackUrl =
+      `auth.entraId.objectIds = [<namespace MI principalId>]` so the
+      namespace is the only caller the proxy will allow.
+  8.  Create or update the namespace trigger config — callbackUrl =
       `https://<sandboxId>--8080.<region>.adcproxy.io`, metadata =
       `{sandboxGroupName, sandboxId}`.
   9.  Run the OAuth consent flow for the SharePoint connection and
@@ -72,7 +72,7 @@ SANDBOX_GROUP_API_VERSION = "2026-02-01-preview"
 # pattern: https://<sandboxId>--<port>.<region>.adcproxy.io
 ADC_PROXY_HOST_TEMPLATE = "{sandbox_id}--{port}.{region}.adcproxy.io"
 
-# Audience the gateway MUST mint its MI token for when calling the
+# Audience the namespace MUST mint its MI token for when calling the
 # sandbox via the proxy. From the HAR.
 ADC_PROXY_AUDIENCE = "https://auth.adcproxy.io/"
 
@@ -374,11 +374,11 @@ def step_run_bootstrap(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
 
 
 def step_register_port(cfg: dict[str, Any], sandbox_id: str) -> str:
-    log.info("==> [7/9] registering port 8080 with ADC proxy (Entra-restricted to gateway MI)")
+    log.info("==> [7/9] registering port 8080 with ADC proxy (Entra-restricted to namespace MI)")
     # The Python SDK's add_port / update_ports only exposes
     # PortAuthEntraId(enabled, emails) — no objectIds/tenantIds field
     # for restricting to a specific service principal. We need
-    # objectIds to lock the port down to the gateway MI (per the HAR
+    # objectIds to lock the port down to the namespace MI (per the HAR
     # capture). Hit the REST endpoint directly with httpx + a
     # DefaultAzureCredential token scoped to the data plane.
     import asyncio
@@ -523,7 +523,7 @@ def step_summary(cfg: dict[str, Any], sandbox_id: str, callback_url: str) -> Non
          ALL DONE
         =============================================================
          Drop a PDF into the configured SharePoint library / folder.
-         The Connector Gateway polls once a minute and POSTs each new
+         The Connector Namespace polls once a minute and POSTs each new
          file's properties directly to:
 
            {callback_url}

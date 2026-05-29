@@ -1,10 +1,11 @@
-# SharePoint document automation, secured by Connector Gateway + ACA Sandbox
+# ACA Sandbox: event-driven SharePoint document automation with OCR + LLM extraction
 
-> **A SharePoint file-created event POSTs directly to an ACA Sandbox
-> HTTP endpoint — no receiver app, no Function host. Inside the
-> sandbox, GitHub Copilot CLI uses the SharePoint MCP to fetch
-> the file, OCR-extracts the invoice with `pdftotext` / `tesseract`,
-> and writes the result back to SharePoint via the same MCP.**
+> **An ACA Sandbox is the direct HTTPS webhook target for a Connector
+> Namespaces SharePoint trigger — no receiver app, no Function host
+> in between. Inside the sandbox, GitHub Copilot CLI uses the
+> SharePoint MCP to fetch the new file, `pdftotext` / `tesseract`
+> extract the invoice data, and the result is written back to
+> SharePoint via the same MCP.**
 
 ## Deploy and test
 
@@ -30,7 +31,7 @@ azd env set SHAREPOINT_OUTPUT_FOLDER 'testinvoices/extracted'
 azd up
 ```
 
-The post-deploy hook provisions the gateway-side glue (port
+The post-deploy hook provisions the namespace-side glue (port
 registration on the sandbox proxy, trigger config wired to the
 sandbox's adcproxy URL), bootstraps the sandbox (`poppler-utils`,
 `tesseract`, Copilot CLI, the FastAPI listener on `:8080`), applies
@@ -47,7 +48,7 @@ into your input folder:
 | `invoice-text.pdf` | the easy case (`pdftotext` extracts directly) |
 | `invoice-scanned.pdf` | same invoice as an image-only PDF — forces the agent through the `tesseract` OCR fallback |
 
-Within ~60 seconds the gateway poll fires, the sandbox wakes via
+Within ~60 seconds the namespace poll fires, the sandbox wakes via
 the `OnDemand` activation, Copilot CLI walks the SharePoint MCP
 (`getSiteByPath` → `listDocumentLibrariesInSite` → `getFolderChildren`
 → `readSmallBinaryFile` → `createSmallTextFile`), and a
@@ -95,13 +96,13 @@ azd down --purge --force
                        │   polled every 1 min
                        ▼
  ┌─────────────────────────────────────────────────────────────────┐
- │  Connector Gateway  (westcentralus)                             │
+ │  Connector Namespace  (westcentralus)                             │
  │  ├─ sharepointonline connection  (OAuth → your SP site)         │
  │  ├─ workiqsharepoint connection  (OAuth → your SP site, MCP)    │
  │  ├─ mcpserverConfig (kind=ManagedMcpServer, workiqsharepoint)   │
  │  └─ triggerConfig (GetOnNewFileItems)                           │
  │       authentication: ManagedServiceIdentity                    │
- │         identity  = gateway MI                                  │
+ │         identity  = namespace MI                                  │
  │         audience  = https://auth.adcproxy.io/                   │
  │       callbackUrl = https://<sbxId>--8080.<region>.adcproxy.io  │
  │       body        = @triggerBody()                              │
@@ -110,11 +111,11 @@ azd down --purge --force
                               │  POST callbackUrl
                               │  Authorization: Bearer <MI token>
                               │    aud = https://auth.adcproxy.io/
-                              │    oid = gateway MI principalId
+                              │    oid = namespace MI principalId
                               ▼
  ┌─────────────────────────────────────────────────────────────────┐
  │  adcproxy.io  (per-sandbox HTTPS, Entra-restricted)             │
- │    auth.entraId.objectIds = [ gateway MI principalId ]          │
+ │    auth.entraId.objectIds = [ namespace MI principalId ]          │
  │    activationMode         = OnDemand                            │
  │    → wake sandbox if cold, forward POST to :8080                │
  └────────────────────────────┬────────────────────────────────────┘
@@ -146,14 +147,14 @@ azd down --purge --force
  │                            ▼                                    │
  │   ┌─────────────────────────────────────────────────────────┐   │
  │   │ egress proxy  (Deny default + Transform rules)          │   │
- │   │   X-API-Key:     <gateway MCP key>  on MCP host         │   │
+ │   │   X-API-Key:     <namespace MCP key>  on MCP host         │   │
  │   │   Authorization: token <PAT>        on GitHub hosts     │   │
  │   │   → sandbox holds NO MCP key; key stamped at boundary   │   │
  │   └────────────────────────┬────────────────────────────────┘   │
  └────────────────────────────┼────────────────────────────────────┘
                               ▼
  ┌─────────────────────────────────────────────────────────────────┐
- │  Connector Gateway MCP runtime → workiqsharepoint backend       │
+ │  Connector Namespace MCP runtime → workiqsharepoint backend       │
  │  → Microsoft Graph (using the SharePoint connection's OAuth)    │
  │  → write <filename>.json into /<output folder>/                 │
  └─────────────────────────────────────────────────────────────────┘
@@ -163,17 +164,17 @@ azd down --purge --force
 
 ## Security model
 
-Two SharePoint OAuth connections (one per gateway capability), one
+Two SharePoint OAuth connections (one per namespace capability), one
 sandbox-side managed identity, and **no SharePoint credentials
 inside the sandbox**.
 
 | Component | Purpose |
 |---|---|
-| **Connector Gateway MI** | Mints the bearer token attached to every trigger POST to the sandbox proxy. Granted `Container Apps SandboxGroup Data Owner` on the sandbox group so the proxy can wake the sandbox on demand. |
+| **Connector Namespace MI** | Mints the bearer token attached to every trigger POST to the sandbox proxy. Granted `Container Apps SandboxGroup Data Owner` on the sandbox group so the proxy can wake the sandbox on demand. |
 | **Sandbox group MI** | Sandbox-side identity (used by the proxy + by `set_egress_policy` when post-deploy applies the Deny default). |
 | **sharepointonline connection** | OAuth-authorized to your SharePoint site. Used **only** by the trigger config — receives change notifications from SharePoint. |
 | **workiqsharepoint connection** | OAuth-authorized to your SharePoint site. Used **only** by the MCP server — the sandbox calls JSON-RPC tools (`getSiteByPath`, `readSmallBinaryFile`, `createSmallTextFile`) through this. |
-| **mcpserverConfig (`kind: ManagedMcpServer`)** | The gateway-published MCP HTTP endpoint the sandbox connects to. Authenticates with `X-API-Key` (stamped by the egress proxy). |
+| **mcpserverConfig (`kind: ManagedMcpServer`)** | The namespace-published MCP HTTP endpoint the sandbox connects to. Authenticates with `X-API-Key` (stamped by the egress proxy). |
 | **Egress proxy** | Deny default + Transform rules. Holds the MCP `X-API-Key` and the GitHub `Authorization` token. Stamps headers on outbound requests — the sandbox process never sees them. |
 
 ### What's enforced — and where
@@ -181,11 +182,11 @@ inside the sandbox**.
 Three independent checks gate this flow; each is short-lived and
 audience-scoped:
 
-1. **Trigger → sandbox** — `adcproxy.io` validates the gateway
+1. **Trigger → sandbox** — `adcproxy.io` validates the namespace
    MI's bearer token (signature, `iss`, `aud=https://auth.adcproxy.io/`,
    `oid ∈ port.entraId.objectIds`). Wrong `oid` ⇒ **403**, no
    token ⇒ **401**.
-2. **Sandbox → MCP** — the gateway MCP HTTP endpoint requires
+2. **Sandbox → MCP** — the namespace MCP HTTP endpoint requires
    `X-API-Key`. The sandbox doesn't have the key; the egress proxy
    stamps it on every outbound request to the MCP host. A request
    leaving the sandbox to any other host without a matching
@@ -193,7 +194,7 @@ audience-scoped:
 3. **MCP → SharePoint** — the upstream `workiqsharepoint` MCP
    server uses the connection's OAuth token (acquired once at deploy
    via `az connector-namespace connection authorize`) to call
-   Microsoft Graph. The token never leaves the gateway's runtime.
+   Microsoft Graph. The token never leaves the namespace's runtime.
 
 The sandbox holds **no SharePoint credential, no MCP API key**.
 Compromise of the sandbox process leaks only the GitHub PAT
@@ -201,13 +202,13 @@ Compromise of the sandbox process leaks only the GitHub PAT
 *before any network call* — see [Going further](#going-further-per-file-child-sandboxes)
 for why this trade-off exists and the path off it).
 
-### Where the gateway API key lives
+### Where the namespace API key lives
 
-| Location | Holds gateway API key? |
+| Location | Holds namespace API key? |
 |---|---|
 | Bicep state / azd deployment state | ❌ |
 | Operator shell history | ❌ |
-| Connector Gateway control plane | ✅ (issued by `listApiKey`) |
+| Connector Namespace control plane | ✅ (issued by `listApiKey`) |
 | Sandbox env / disk / memory | ❌ |
 | Sandbox egress proxy | ✅ |
 | Outbound MCP request on the wire | ✅ (stamped by proxy) |
@@ -289,7 +290,7 @@ the boundary).
 ## Related
 
 - [Scenario 10 — connectors-email-triage](../10-connectors-email-triage/README.md)
-  — same gateway + sandbox primitives, but with an **ACA receiver
+  — same namespace + sandbox primitives, but with an **ACA receiver
   in the middle** and Teams MCP as the output sink. Read 10 first
   for the receiver-mediated pattern; this scenario is the
   no-receiver evolution.

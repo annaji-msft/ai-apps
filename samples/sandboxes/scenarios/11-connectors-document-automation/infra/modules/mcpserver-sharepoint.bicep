@@ -1,11 +1,11 @@
 // mcpserver-sharepoint.bicep
 //
-// Managed MCP server config on the Connector Gateway. Forwards every
+// Managed MCP server config on the Connector Namespace. Forwards every
 // MCP request to the upstream Work IQ SharePoint MCP server
 // (`workiqsharepoint`) via the connection created in
 // `connection-sharepoint-mcp.bicep`.
 //
-// kind=ManagedMcpServer => the gateway publishes a single MCP HTTP
+// kind=ManagedMcpServer => the namespace publishes a single MCP HTTP
 // endpoint and proxies all JSON-RPC traffic to the downstream MCP
 // server. We don't enumerate per-tool operations[] in Bicep — the
 // downstream server publishes its tool catalog (e.g., list files,
@@ -15,7 +15,7 @@
 //   https://{host}/api/connectorGateways/{connectorGatewayId}/mcpServerConfigs/{name}/mcp
 // Auth: X-API-Key (sandbox egress proxy stamps it on the way out).
 
-@description('Parent Connector Gateway resource name.')
+@description('Parent Connector Namespace resource name.')
 param gatewayName string
 
 @description('Name for the MCP server config (2-64 chars).')
@@ -45,7 +45,7 @@ resource mcp 'Microsoft.Web/connectorGateways/mcpserverConfigs@2026-05-01-previe
         connectionName: sharepointMcpConnectionName
         // ManagedMcpServer requires exactly one operation per connector;
         // 'mcp_SharePointRemoteServer' is the upstream MCP endpoint that
-        // the gateway proxies JSON-RPC traffic to (per the managedMcpOperations
+        // the namespace proxies JSON-RPC traffic to (per the managedMcpOperations
         // catalog response). The downstream server publishes its tool
         // catalog via tools/list.
         operations: [

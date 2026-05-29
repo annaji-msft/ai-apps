@@ -1,23 +1,23 @@
-// connector-gateway.bicep
+// connector-namespace.bicep
 //
 // Provisions a Microsoft.Web/connectorGateways resource with a
-// SystemAssigned managed identity. The gateway hosts:
+// SystemAssigned managed identity. The namespace hosts:
 //   - connections (this scenario: SharePoint Online)
 //   - mcpserverConfigs (this scenario: Work IQ SharePoint MCP)
 //   - triggerConfigs (this scenario: "When a file is created (properties only)")
 //
 // Unlike scenario 10, the trigger's callback URL points at the
-// sandbox directly through the ADC proxy — the gateway MI is what
+// sandbox directly through the ADC proxy — the namespace MI is what
 // signs the outbound POST to the sandbox. We grant that MI
 // "Container Apps SandboxGroup Data Owner" on the sandbox group
 // so the ADC proxy will wake the sandbox on demand.
 
-@description('Connector Gateway (a.k.a. connector namespace) name. 2-64 chars, alphanumeric + hyphen + underscore.')
+@description('Connector Namespace (a.k.a. connector namespace) name. 2-64 chars, alphanumeric + hyphen + underscore.')
 @minLength(2)
 @maxLength(64)
 param name string
 
-@description('Azure region for the gateway. Must be a Connector Gateway preview-supported region (currently only westcentralus).')
+@description('Azure region for the Connector Namespace. Must be a Connector Namespace preview-supported region (currently only westcentralus).')
 param location string
 
 @description('Tags applied to every resource the module emits.')
@@ -33,14 +33,14 @@ resource gateway 'Microsoft.Web/connectorGateways@2026-05-01-preview' = {
   properties: {}
 }
 
-@description('Connector Gateway resource ID.')
+@description('Connector Namespace resource ID.')
 output id string = gateway.id
 
-@description('Connector Gateway resource name (handy for child modules).')
+@description('Connector Namespace resource name (handy for child modules).')
 output name string = gateway.name
 
-@description('System-assigned MI principalId on the gateway. Goes into the sandbox port allowlist (Entra objectIds) AND gets SandboxGroup Data Owner on the sandbox group.')
+@description('System-assigned MI principalId on the namespace. Goes into the sandbox port allowlist (Entra objectIds) AND gets SandboxGroup Data Owner on the sandbox group.')
 output principalId string = gateway.identity.principalId
 
-@description('System-assigned MI tenantId on the gateway.')
+@description('System-assigned MI tenantId on the namespace.')
 output tenantId string = gateway.identity.tenantId

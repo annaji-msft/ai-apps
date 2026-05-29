@@ -1,9 +1,9 @@
-// gateway-sandbox-rbac.bicep
+// namespace-sandbox-rbac.bicep
 //
 // Grants two principals the role needed to operate against the
 // sandbox group:
 //
-//   - The Connector Gateway's SystemAssigned MI (required so the
+//   - The Connector Namespace's SystemAssigned MI (required so the
 //     ADC proxy can wake the host sandbox in response to a trigger)
 //   - The operator/azd user (required for `azd up` -> post-deploy
 //     to create, list, exec into, and configure the host sandbox).
@@ -15,14 +15,14 @@
 //
 // The role grant alone isn't sufficient for the trigger path — the
 // sandbox's port registration (post-deploy) ALSO has to put the
-// gateway MI's objectId into its Entra allowlist
+// namespace MI's objectId into its Entra allowlist
 // (`auth.entraId.objectIds`). Both must be true for the proxy to
 // wake the sandbox.
 
 @description('Sandbox group resource name (scope of the role assignment).')
 param sandboxGroupName string
 
-@description('Connector Gateway MI principal ID.')
+@description('Connector Namespace MI principal ID.')
 param gatewayPrincipalId string
 
 @description('Operator / azd user principal ID. Pass empty string to skip the operator grant (e.g., in CI where the deployer is a service principal that already has access).')
