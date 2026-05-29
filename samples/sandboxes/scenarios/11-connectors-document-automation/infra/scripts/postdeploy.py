@@ -23,7 +23,8 @@ Steps (idempotent — re-running is safe):
       scenario 10).
   6.  Run bootstrap.sh inside the sandbox (with all the SHAREPOINT_*
       and COPILOT_GITHUB_TOKEN env vars). Bootstrap installs the
-      toolchain + starts uvicorn under systemd.
+      toolchain + starts uvicorn on :8080 as a detached process
+      (sandboxes don't run systemd; we use nohup+setsid).
   7.  Register port 8080 with the ADC proxy: PUT /ports with
       `auth.entraId.objectIds = [<gateway MI principalId>]` so the
       gateway is the only caller the proxy will allow.

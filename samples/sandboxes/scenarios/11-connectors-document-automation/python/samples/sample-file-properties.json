@@ -1,11 +1,29 @@
 {
-  "ID": 42,
-  "FileLeafRef": "invoice-acme-2026-001.pdf",
-  "FileRef": "/teams/Finance/Invoices/Inbox/invoice-acme-2026-001.pdf",
-  "{Identifier}": "%252fteams%252fFinance%252fInvoices%252fInbox%252finvoice-acme-2026-001.pdf",
-  "Modified": "2026-05-28T22:00:00Z",
+  "@odata.etag": "\"1\"",
+  "ItemInternalId": "19",
+  "ID": 19,
+  "Modified": "2026-05-29T16:19:52Z",
   "Editor": {
+    "@odata.type": "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedUser",
+    "Claims": "i:0#.f|membership|alice@contoso.com",
+    "DisplayName": "Alice Example",
     "Email": "alice@contoso.com",
-    "DisplayName": "Alice Example"
-  }
+    "Department": "Finance",
+    "JobTitle": "AP Specialist"
+  },
+  "Editor#Claims": "i:0#.f|membership|alice@contoso.com",
+  "MediaServiceImageTags": [],
+  "Created": "2026-05-29T16:19:52Z",
+  "Author": {
+    "@odata.type": "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedUser",
+    "Claims": "i:0#.f|membership|alice@contoso.com",
+    "DisplayName": "Alice Example",
+    "Email": "alice@contoso.com"
+  },
+  "Author#Claims": "i:0#.f|membership|alice@contoso.com",
+  "OData__DisplayName": "",
+  "{Identifier}": "Shared%2bDocuments%252finvoice3.pdf",
+  "{IsFolder}": false,
+  "FileLeafRef": "invoice3.pdf",
+  "FileRef": "/teams/Finance/Shared Documents/invoice3.pdf"
 }

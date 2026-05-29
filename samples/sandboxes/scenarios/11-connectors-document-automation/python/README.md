@@ -59,8 +59,17 @@ Watch listener stdout for the per-run logs.
 - The egress proxy that stamps the gateway API key on outbound MCP
   calls does NOT run locally. The local listener sends MCP requests
   with no auth header — you must adapt to either (a) include the
-  API key inline in the MCP URL via your local `.mcp.json`, or (b)
-  set up a local mitmproxy that stamps the header.
+  API key inline in the MCP URL via your local `.mcp.json` (most
+  MCP clients support `?api-key=...` query params), or (b) set up a
+  local mitmproxy that stamps the header.
 - The whole point of running locally is iterating on the prompt
   + Copilot invocation. For the end-to-end "gateway trigger fires
-  per real SharePoint upload" flow, use the deployed sandbox.
+  per real SharePoint upload" flow, use the deployed sandbox — the
+  trigger has no equivalent "deliver to localhost" mode.
+- Quick re-deploy of just the listener (no full `azd up` cycle):
+  ```bash
+  # from the scenario folder
+  python infra/scripts/postdeploy.py --skip-oauth
+  ```
+  This re-uploads `host/*` into the existing sandbox and restarts
+  uvicorn without re-running the OAuth consents.

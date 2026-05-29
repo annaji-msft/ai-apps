@@ -6,22 +6,27 @@ trigger POSTs directly to this listener (via the ADC proxy URL
 already validated that the caller is the gateway MI; we trust the
 trust boundary at the proxy and just process the payload.
 
-Per request (one invoice PDF):
+Per request (one SharePoint file event):
 
-  1. Receive the SharePoint file metadata (id, name, path, ...) in
-     the request body. The trigger config sends only the
-     `dynamicProperties` block from the upstream event, NOT the full
-     event envelope.
-  2. Allocate a fresh per-run workspace at /work/<run-id>/.
-  3. Build a prompt for Copilot CLI that instructs it to:
-       a. Call the SharePoint MCP `GetFileContent` (or equivalent)
-          tool with the file id, save the bytes to /work/.../input.pdf
-       b. Run `pdftotext` / `tesseract` to extract text.
-       c. Reason over the text + emit a normalized invoice JSON.
-       d. Call the SharePoint MCP `UploadFile` (or equivalent) tool
-          to drop the result JSON into the /Invoices/Extracted folder.
-  4. Run Copilot CLI non-interactively with the prompt.
-  5. Return 200 to the gateway. Cleanup is best-effort.
+  1. Receive the SharePoint file's ``dynamicProperties`` block in
+     the request body. The trigger config's body template is
+     ``@triggerBody()`` so we get the full property bag (ID,
+     FileLeafRef, FileRef, ``{Identifier}``, Editor, etc.).
+  2. Apply the self-loop guard — skip anything in the output
+     folder or with a ``.json`` extension, since the gateway also
+     fires for files we ourselves upload to /Extracted.
+  3. Allocate a fresh per-run workspace at ``/work/<run-id>/``.
+  4. Build a prompt that walks Copilot CLI through the SharePoint
+     MCP tools step-by-step (see ``prompt.md``):
+       a. ``getSiteByPath`` → siteId
+       b. ``listDocumentLibrariesInSite`` → documentLibraryId
+       c. ``getFolderChildren`` → match FileLeafRef → fileId
+       d. ``readSmallBinaryFile`` → bytes (base64)
+       e. extract via ``pdftotext`` / ``tesseract`` / fresh Python
+       f. ``createSmallTextFile`` → upload result JSON to /Extracted
+  5. Run Copilot CLI non-interactively with the prompt.
+  6. Return 200 to the gateway. Long-running work happens in a
+     background task; we ack fast so the gateway doesn't retry.
 
 Egress: the sandbox's egress policy (applied at boot by the
 post-deploy script) is deny-default + Transform rules that stamp
@@ -111,7 +116,7 @@ async def trigger(request: Request) -> dict[str, Any]:
         {
           "ID": 42,
           "FileLeafRef": "invoice-2026-001.pdf",
-          "FileRef": "/teams/.../Invoices/Inbox/invoice-2026-001.pdf",
+          "FileRef": "/teams/Finance/Shared Documents/invoice-2026-001.pdf",
           "{Identifier}": "%252fteams%252f...%252finvoice-2026-001.pdf",
           ...
         }

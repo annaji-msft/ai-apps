@@ -7,12 +7,12 @@
 # long-running uvicorn process on :8080.
 #
 # Idempotent — running it twice is a no-op (apt cached, pip cached,
-# systemd unit replaced, uvicorn restarted). The post-deploy script
+# old uvicorn killed before re-launch). The post-deploy script
 # uploads this and runs it via `sandbox.exec` once at deploy time.
 #
 # Required env vars (passed by the post-deploy script before invoking
-# this — they end up baked into /etc/systemd/system/listener.service
-# `Environment=` directives so they persist across uvicorn restarts):
+# this — they end up written to /opt/listener/.env which the listener
+# loads at start-up; secrets stay out of /proc/N/cmdline):
 #
 #   SHAREPOINT_MCP_URL       full HTTPS URL of the gateway-fronted MCP
 #   SHAREPOINT_SITE_URL      e.g. https://contoso.sharepoint.com/teams/Finance
@@ -65,9 +65,9 @@ if ! command -v copilot >/dev/null 2>&1; then
     curl -fsSL https://gh.io/copilot-install | bash
 fi
 
-# Make Copilot's install location discoverable from the systemd
+# Make Copilot's install location discoverable from the listener's
 # environment (the installer typically drops a binary in /root/.local/bin
-# or /usr/local/bin — pin both on PATH in the unit).
+# or /usr/local/bin — pin both on PATH in start.sh below).
 COPILOT_PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
 # ---- 4. Launch listener as a detached process ---------------------------
