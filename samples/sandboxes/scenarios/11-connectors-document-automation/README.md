@@ -1,8 +1,8 @@
 # SharePoint document automation, secured by Connector Gateway + ACA Sandbox
 
-> **A SharePoint file-created event POSTs directly to a Firecracker
-> sandbox HTTP endpoint — no receiver app, no Function host. Inside
-> the sandbox, GitHub Copilot CLI uses the SharePoint MCP to fetch
+> **A SharePoint file-created event POSTs directly to an ACA Sandbox
+> HTTP endpoint — no receiver app, no Function host. Inside the
+> sandbox, GitHub Copilot CLI uses the SharePoint MCP to fetch
 > the file, OCR-extracts the invoice with `pdftotext` / `tesseract`,
 > and writes the result back to SharePoint via the same MCP.**
 
@@ -39,7 +39,7 @@ the deny-default egress policy with `X-API-Key` and
 OAuth consent on the SharePoint connections (`sharepointonline`
 for the trigger, `workiqsharepoint` for the MCP).
 
-**Confirm end-to-end** — drop one of the [sample invoices](python/samples/invoices)
+**Confirm end-to-end** — drop one of the [sample invoices](samples/invoices)
 into your input folder:
 
 | File | What it tests |
@@ -120,7 +120,7 @@ azd down --purge --force
  └────────────────────────────┬────────────────────────────────────┘
                               ▼
  ┌─────────────────────────────────────────────────────────────────┐
- │  Sandbox  (Firecracker microVM, Ubuntu base)                    │
+ │  Sandbox  (ACA Sandbox, Ubuntu base)                            │
  │                                                                 │
  │   ┌─────────────────────────────────────────────────────────┐   │
  │   │ listener.py   (FastAPI :8080)                           │   │
@@ -258,8 +258,8 @@ registration, and re-PUTs the trigger config.
 | | Azure Functions | This sandbox |
 |---|---|---|
 | `apt install poppler-utils tesseract-ocr` per request | painful (custom container, slow cold start) | one-line in `bootstrap.sh` |
-| Let the LLM **write and execute fresh Python** per document | RCE against the Function host | the point — Firecracker isolation |
-| Parse a possibly-malicious PDF (CVE exposure) | shared blast radius | one microVM, neighbors unaffected |
+| Let the LLM **write and execute fresh Python** per document | RCE against the Function host | the point — per-event sandbox isolation |
+| Parse a possibly-malicious PDF (CVE exposure) | shared blast radius | one ACA Sandbox, neighbors unaffected |
 | Memory-hungry OCR on multi-page scans | tight consumption limits | per-VM CPU/RAM |
 | Deny-default egress per invocation | not really | yes — extracted data goes only where we allow |
 | **The webhook target itself** | needs the Function App to host the receiver | the sandbox **is** the webhook target |
@@ -271,10 +271,10 @@ registration, and re-PUTs the trigger config.
 The shipped design uses one long-lived host sandbox that serializes
 requests through Copilot CLI. The sandbox is isolated from any
 other tenant in the sandbox group, but multiple files from the same
-SharePoint library share the same Firecracker VM (in per-run
+SharePoint library share the same ACA Sandbox VM (in per-run
 workspaces `/work/<run_id>/`).
 
-For **true per-file isolation** — one Firecracker VM per invoice,
+For **true per-file isolation** — one ACA Sandbox per invoice,
 destroyed after — the host listener would spawn a child sandbox per
 incoming trigger. That requires an Azure credential **inside** the
 host sandbox to call `Microsoft.App/sandboxGroups/.../begin_create_sandbox`.
