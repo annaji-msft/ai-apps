@@ -22,6 +22,8 @@ set -euo pipefail
 
 ROLE_NAME="Container Apps SandboxGroup Data Owner"
 CLI_INSTALL_URL="https://raw.githubusercontent.com/microsoft/azure-container-apps/main/docs/early/aca-cli/install.sh"
+CLI_REPO="microsoft/azure-container-apps"
+CLI_VERSION_URL="https://raw.githubusercontent.com/${CLI_REPO}/main/docs/early/aca-cli/latest-version.txt"
 
 : "${ACA_RESOURCE_GROUP:=ai-apps-samples-rg}"
 : "${ACA_SANDBOX_GROUP:=ai-apps-samples-group}"
@@ -57,7 +59,38 @@ az group create \
 # ----- 2. Install aca CLI ------------------------------------------------
 if ! command -v aca >/dev/null 2>&1; then
     echo "==> Installing the aca CLI..."
-    curl -fsSL "$CLI_INSTALL_URL" | sh
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            # Upstream install.sh rejects Windows uname -s strings; the
+            # supported alternative is `irm install.ps1 | iex`, but that
+            # pattern is commonly blocked by Defender / ASR. Replicate the
+            # PowerShell installer's two-step download-and-extract in plain
+            # bash with curl + unzip (both ship with Git Bash). aca.exe ends
+            # up in $HOME/.aca/bin — the same path the .ps1 installer uses.
+            for tool in curl unzip; do
+                if ! command -v $tool >/dev/null 2>&1; then
+                    echo "error: detected Windows shell but $tool not found." >&2
+                    echo "       Install Git for Windows (which ships both), then re-run." >&2
+                    exit 1
+                fi
+            done
+            ACA_VERSION="${ACA_VERSION:-$(curl -fsSL "$CLI_VERSION_URL" | tr -d '[:space:]')}"
+            if [[ -z "$ACA_VERSION" ]]; then
+                echo "error: could not fetch latest aca CLI version from $CLI_VERSION_URL" >&2
+                exit 1
+            fi
+            ACA_ZIP_URL="https://github.com/${CLI_REPO}/releases/download/${ACA_VERSION}/${ACA_VERSION}-win-x64.zip"
+            ACA_TMP="$(mktemp -d)"
+            echo "    fetching ${ACA_VERSION} (win-x64)..."
+            curl -fsSL "$ACA_ZIP_URL" -o "$ACA_TMP/aca.zip"
+            mkdir -p "$HOME/.aca/bin"
+            unzip -q -o -j "$ACA_TMP/aca.zip" -d "$HOME/.aca/bin"
+            rm -rf "$ACA_TMP"
+            ;;
+        *)
+            curl -fsSL "$CLI_INSTALL_URL" | sh
+            ;;
+    esac
     export PATH="$HOME/.aca/bin:$PATH"
 fi
 if ! command -v aca >/dev/null 2>&1; then

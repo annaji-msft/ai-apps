@@ -6,11 +6,17 @@ Reads configuration from samples/.env (written by samples/sandboxes/setup/python
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 from pathlib import Path
 
 from azure.identity import DefaultAzureCredential
 from azure.containerapps.sandbox import SandboxGroupClient, endpoint_for_region
+
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
 
 
 def _load_env() -> None:

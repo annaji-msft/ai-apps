@@ -1,0 +1,39 @@
+name: connectors-triggers
+metadata:
+  template: connectors-triggers@1.0.0
+
+# 'azd up' for this sample is a thin wrapper around the existing
+# imperative setup:
+#   1. infra/main.bicep creates ONLY the resource group (everything else uses
+#      preview API versions for which Bicep types are not yet published).
+#   2. The 'postprovision' hook delegates to setup/python/setup.py — the
+#      same script the README documents — which:
+#        * ensures the sandbox group + SystemAssigned MI
+#        * grants 'Container Apps SandboxGroup Data Owner' to the caller
+#        * creates the connector gateway + MI
+#        * creates the office365 connection
+#        * walks you through OAuth consent (opens a browser, waits for Enter)
+#        * grants both access policies (gateway-acl, sandbox-acl)
+#        * fetches the connection runtime URL
+#        * writes everything into samples/.env so the per-run scripts work
+#
+# Per-run sandbox / trigger lifecycle is NOT part of 'azd up' — those are
+# intentionally ephemeral. After 'azd up', run:
+#   cd email-to-sandbox/python && pip install -r requirements.txt && python run.py
+# or:
+#   bash email-to-sandbox/cli/run.sh
+#
+# 'azd down' deletes the resource group (and everything in it).
+
+hooks:
+  postprovision:
+    posix:
+      shell: sh
+      run: infra/hooks/postprovision.sh
+      continueOnError: false
+      interactive: true
+    windows:
+      shell: pwsh
+      run: infra/hooks/postprovision.ps1
+      continueOnError: false
+      interactive: true

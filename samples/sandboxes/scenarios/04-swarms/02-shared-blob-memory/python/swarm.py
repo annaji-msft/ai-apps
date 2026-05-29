@@ -53,6 +53,11 @@ from azure.containerapps.sandbox import (
     endpoint_for_region,
 )
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 ROLE_NAME = "Container Apps SandboxGroup Data Owner"
 SDK_WHEEL_URL = (
     "https://github.com/microsoft/azure-container-apps/releases/download/"
