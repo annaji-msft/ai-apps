@@ -556,24 +556,29 @@ def _authorize_one_connection(cfg: dict[str, Any], connection_name: str, label: 
 
     # 1. Ask the namespace for a consent link.
     #
-    # NOTE: `redirectUrl` is REQUIRED by the listConsentLinks API
-    # (omitting it yields HTTP 500 InternalServerError) but the
-    # first-party Logic-Apps consent flow does NOT navigate to it
-    # after the user signs in — the consent service commits the
-    # OAuth tokens server-side and shows its own "connection
-    # authorized" page. So we pass a harmless HTTPS placeholder
-    # (the connector platform's own callback host) and don't need
-    # a loopback HTTP server to capture anything.
+    # The Logic-Apps consent flow IS a real OAuth handshake with a
+    # `state` query param round-trip — it really does navigate back
+    # to the configured redirectUrl after the user signs in. The
+    # consent service has special-cased a few known-safe redirect
+    # URLs for "no app to redirect to" scenarios; the canonical
+    # one is `https://portal.azure.com` (what az portal uses, and
+    # what the connector-namespaces consent service expects for
+    # CLI-driven flows). After the user signs in, the browser lands
+    # on portal.azure.com and the consent service has already
+    # persisted the OAuth tokens server-side. We just poll the
+    # connection's overallStatus until it flips to Connected.
+    #
+    # The request body is intentionally minimal — `objectId` and
+    # `tenantId` are inferred from the calling principal's bearer
+    # token and don't need to be in the body.
     arm_base = _connection_arm_base(cfg, connection_name)
     link_resp = az_rest(
         "post",
         f"{arm_base}/listConsentLinks?api-version={CONNECTOR_GATEWAY_API_VERSION}",
         body={
             "parameters": [{
-                "objectId": object_id,
                 "parameterName": "token",
-                "tenantId": tenant_id,
-                "redirectUrl": "https://global.consent.azure-apim.net/redirect",
+                "redirectUrl": "https://portal.azure.com",
             }],
         },
     )
