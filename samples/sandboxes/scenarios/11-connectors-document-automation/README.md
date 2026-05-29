@@ -1,266 +1,299 @@
-# 11 — Connectors + Sandboxes: SharePoint document automation
+# SharePoint document automation, secured by Connector Gateway + ACA Sandbox
 
-> **An Azure Connector Gateway trigger POSTs new SharePoint files
-> directly to a Firecracker sandbox HTTP endpoint. Inside the
-> sandbox, an LLM agent fetches the file via the SharePoint MCP,
-> OCRs/extracts invoice data, and writes the result back to
-> SharePoint. No receiver Container App, no Functions host — the
-> sandbox _is_ the webhook target.**
+> **A SharePoint file-created event POSTs directly to a Firecracker
+> sandbox HTTP endpoint — no receiver app, no Function host. Inside
+> the sandbox, GitHub Copilot CLI uses the SharePoint MCP to fetch
+> the file, OCR-extracts the invoice with `pdftotext` / `tesseract`,
+> and writes the result back to SharePoint via the same MCP.**
 
-This scenario showcases the **direct trigger → sandbox** pattern
-that's unique to the Connector Gateway + ACA Sandbox preview:
+## Deploy and test
 
-- **No glue infrastructure**: the gateway's trigger callback URL is
-  the sandbox itself, fronted by the ACA Dev Compute proxy. Cold
-  sandboxes wake on demand per event (`activationMode: OnDemand`).
-  No receiver, no Function App, no ACR.
-- **One service (SharePoint) on both edges**: the trigger uses the
-  classic `sharepointonline` connector to subscribe to file events;
-  the sandbox uses the Work IQ `workiqsharepoint` MCP server to read
-  the file and write the result. Two connections on the same gateway
-  (different connector slugs, so two separate OAuth consents).
-- **OCR + LLM-driven extraction inside Firecracker isolation** — the
-  agent decides whether to use `pdftotext`, `tesseract`, or fresh
-  Python it writes on the spot to handle unusual invoice layouts.
-  That kind of arbitrary-code-per-event execution can't safely live
-  on a shared Function host.
-- **Defense-in-depth egress**: deny-default + Transform rules at the
-  sandbox boundary stamp the MCP API key and the GitHub Copilot
-  authorization header. The sandbox itself holds **no MCP credentials**.
-
-> **Verified end-to-end 2026-05-29:** dropped a real invoice PDF in
-> the configured SharePoint library; trigger fired in ~60s; sandbox
-> woke via adcproxy; Copilot CLI resolved site → drive → file via
-> SharePoint MCP, downloaded with `readSmallBinaryFile`, ran
-> `pdftotext` (would fall back to `tesseract` for scanned PDFs),
-> emitted JSON with `vendor`, `line_items`, `subtotal`, `tax`,
-> `total`, and uploaded `invoice3.pdf.json` to `/Extracted` via
-> `createSmallTextFile`. Self-loop guard correctly skipped the
-> resulting trigger for the `.json` output.
-
-## Architecture
-
-```mermaid
-sequenceDiagram
-    participant SP   as SharePoint library root
-    participant GW   as Connector Gateway
-    participant TR   as triggerConfig (GetOnNewFileItems, 1-min poll)
-    participant PROXY as adcproxy.io (Entra-restricted)
-    participant SBX  as Sandbox /listener (FastAPI :8080)
-    participant EGRESS as Sandbox egress proxy
-    participant MCP  as mcpserverConfig (Work IQ SharePoint)
-    participant SP2  as SharePoint library /Extracted
-
-    SP-->>GW: new file (polled every minute)
-    GW->>TR: dispatch event
-    TR->>PROXY: POST https://<sbxId>--8080.<region>.adcproxy.io
-    Note over TR,PROXY: Auth: Bearer <MI token aud=auth.adcproxy.io>
-    PROXY->>PROXY: validate caller objectId == gateway MI
-    PROXY->>SBX: wake (if cold) + forward POST
-    SBX->>SBX: skip if file is in /Extracted or *.json (self-loop guard)
-    SBX->>SBX: per-run /work/<run_id>/, render prompt
-    SBX->>EGRESS: copilot --allow-all-tools (SharePoint MCP)
-    EGRESS->>MCP: same request + X-API-Key (added at the boundary)
-    MCP->>SP: getSiteByPath → listDocumentLibrariesInSite → getFolderChildren → readSmallBinaryFile
-    SP-->>MCP: PDF bytes (base64-encoded)
-    MCP-->>EGRESS: tool result
-    EGRESS-->>SBX: file content saved
-    SBX->>SBX: pdftotext / tesseract / Python extract → result.json
-    SBX->>EGRESS: copilot calls SharePoint MCP createSmallTextFile
-    EGRESS->>MCP: same + X-API-Key
-    MCP->>SP2: upload <filename>.json
-    SP2-->>MCP: 200
-    SBX-->>PROXY: 200 accepted=<run_id>
-```
-
-## Security model
-
-| Location                                  | Holds gateway API key? |
-|-------------------------------------------|------------------------|
-| Bicep state / azd deployment state        | ❌                     |
-| Operator shell history                    | ❌                     |
-| Connector Gateway control plane           | ✅ (issued)            |
-| Sandbox env / disk / memory               | ❌                     |
-| Sandbox egress proxy                      | ✅                     |
-| Outbound MCP request on the wire          | ✅ (stamped by proxy)  |
-
-The sandbox never sees the MCP key. Copilot CLI sees only the bare
-gateway URL; the egress proxy stamps `X-API-Key` on every outbound
-HTTPS request to the MCP host. Same defense-in-depth pattern as
-scenario 10.
-
-For the GitHub Copilot CLI auth, see the [scenario 10
-README](../10-connectors-email-triage/README.md#key-design-decisions)
-for the trade-off: Copilot CLI errors immediately if its env doesn't
-contain a `COPILOT_GITHUB_TOKEN`, so the PAT has to live in the
-sandbox env (proxy can't intervene before the network call). The
-egress proxy stamps `Authorization` on the GitHub Copilot hosts as
-defense-in-depth on top of that.
-
-## What this ships
-
-```
-11-connectors-document-automation/
-├── README.md                  this file
-├── azure.yaml                 azd entrypoint (provision + post-deploy hook)
-├── .gitignore
-├── infra/
-│   ├── main.bicep             root template
-│   ├── main.parameters.json   azd parameter file
-│   ├── modules/
-│   │   ├── connector-gateway.bicep
-│   │   ├── connection-sharepoint.bicep      sharepointonline (classic, for trigger)
-│   │   ├── connection-sharepoint-mcp.bicep  workiqsharepoint (MCP backend)
-│   │   ├── mcpserver-sharepoint.bicep       kind=ManagedMcpServer
-│   │   ├── sandbox-group.bicep              Microsoft.App/sandboxGroups
-│   │   └── gateway-sandbox-rbac.bicep       Gateway MI -> SandboxGroup Data Owner
-│   └── scripts/
-│       ├── postdeploy.py      orchestration (create sandbox, upload,
-│       │                      bootstrap, register port, create trigger,
-│       │                      OAuth consent)
-│       ├── postdeploy.sh      Linux/macOS wrapper (venv + dispatch)
-│       └── postdeploy.ps1     Windows wrapper (venv + dispatch)
-├── host/                      everything that runs INSIDE the sandbox
-│   ├── listener.py            FastAPI on :8080 — gateway trigger target
-│   ├── prompt.md              template instructions for Copilot CLI
-│   ├── requirements.txt
-│   └── bootstrap.sh           one-time installer (apt + pip + nohup+setsid)
-└── python/                    local-dev shortcut (run listener locally)
-    ├── README.md
-    └── samples/sample-file-properties.json
-```
-
-## How to run
+**Prereqs:** `azd`, `az` CLI, Python 3.10+, a working SharePoint
+site you can authorize against, and a GitHub PAT with access to
+[GitHub Models](https://github.com/marketplace/models) (Copilot CLI
+uses Models as its LLM backend).
 
 ```bash
-cd samples/sandboxes/scenarios/11-connectors-document-automation
+azd auth login
+az login
 
-# Required env values (post-deploy bakes these into the sandbox)
-azd env set GITHUB_PAT <ghp_...>
-azd env set SHAREPOINT_SITE_URL 'https://contoso.sharepoint.com/teams/Finance'
-azd env set SHAREPOINT_LIBRARY_ID '<library-guid>'         # GUID from SP REST API
+# Required: where to receive triggers + where to deliver results
+azd env set GITHUB_PAT              <ghp_…>
+azd env set SHAREPOINT_SITE_URL     'https://contoso.sharepoint.com/teams/Finance'
+azd env set SHAREPOINT_LIBRARY_ID   '<library-list-GUID>'   # the SP list ID from the URL
 
-# Optional folder scoping (default: process entire library, write to /Extracted)
-azd env set SHAREPOINT_INPUT_FOLDER 'testinvoices/inbound'    # only process files here
-azd env set SHAREPOINT_OUTPUT_FOLDER 'testinvoices/extracted' # write results here
-
-# Optional: where to run the sandbox group (defaults to westus2)
-azd env set ACA_SANDBOX_REGION westus2
+# Optional folder scoping (default: process every new file in the library,
+# write to /Extracted in the library root)
+azd env set SHAREPOINT_INPUT_FOLDER  'testinvoices/inbound'
+azd env set SHAREPOINT_OUTPUT_FOLDER 'testinvoices/extracted'
 
 azd up
 ```
 
-The trigger config itself fires for every new file in the library
-(SharePoint Online's `GetOnNewFileItems` has no folder filter; the
-folder-scoped ops are deprecated). The listener filters server-side:
+The post-deploy hook provisions the gateway-side glue (port
+registration on the sandbox proxy, trigger config wired to the
+sandbox's adcproxy URL), bootstraps the sandbox (`poppler-utils`,
+`tesseract`, Copilot CLI, the FastAPI listener on `:8080`), applies
+the deny-default egress policy with `X-API-Key` and
+`Authorization` Transform rules, and opens **two** browser tabs for
+OAuth consent on the SharePoint connections (`sharepointonline`
+for the trigger, `workiqsharepoint` for the MCP).
 
-- skip anything outside `SHAREPOINT_INPUT_FOLDER` (when set)
-- skip anything inside `SHAREPOINT_OUTPUT_FOLDER` (self-loop guard)
-- skip anything whose name ends with `.json`
+**Confirm end-to-end** — drop one of the [sample invoices](python/samples/invoices)
+into your input folder:
 
-Post-deploy will:
-1. Resolve the SharePoint MCP runtime URL from the gateway.
-2. Create (or reuse) the long-lived host sandbox.
-3. Upload `host/listener.py` + `host/prompt.md` + `host/bootstrap.sh`.
-4. Run `bootstrap.sh` inside the sandbox — installs the toolchain
-   (poppler-utils, tesseract, pdfplumber, pytesseract, pillow, Copilot
-   CLI) while egress is still open, then starts uvicorn on :8080
-   as a detached process (sandboxes don't run systemd).
-5. Apply deny-default egress + Transform rules that stamp `X-API-Key`
-   on the SharePoint MCP host and `Authorization` on the GitHub
-   Copilot CLI hosts. The sandbox sees no credentials.
-6. Register port 8080 with the ADC proxy, with the gateway MI as the
-   sole allowed Entra caller (`auth.entraId.objectIds`).
-7. Create the trigger config — `callbackUrl` points at
-   `https://<sbxId>--8080.<region>.adcproxy.io`, body template is
-   `@triggerBody()` so the listener receives the full SharePoint
-   `dynamicProperties` block per file.
-8. Pop browser tabs for the two SharePoint connection consents
-   (`sharepointonline` for the trigger, `workiqsharepoint` for the
-   MCP backend).
+| File | What it tests |
+|---|---|
+| `invoice-text.pdf` | the easy case (`pdftotext` extracts directly) |
+| `invoice-scanned.pdf` | same invoice as an image-only PDF — forces the agent through the `tesseract` OCR fallback |
 
-After it finishes, drop an invoice PDF into your SharePoint library.
-Within ~1 minute (the trigger poll cadence) the sandbox will wake,
-fetch, OCR, extract, and upload the result JSON to the configured
-output folder (default `Extracted`).
+Within ~60 seconds the gateway poll fires, the sandbox wakes via
+the `OnDemand` activation, Copilot CLI walks the SharePoint MCP
+(`getSiteByPath` → `listDocumentLibrariesInSite` → `getFolderChildren`
+→ `readSmallBinaryFile` → `createSmallTextFile`), and a
+`<filename>.json` lands in `/<output folder>/`.
 
-> **Self-loop note:** the gateway also fires for the `.json` files
-> the sandbox writes to `/Extracted`. The listener has a self-loop
-> guard that skips any file whose path is inside the output folder
-> or whose name ends with `.json`.
+Both PDFs extract to the same JSON:
 
-Tear down with `azd down --purge --force --no-prompt`.
+```json
+{
+  "vendor": "Contoso Office Supplies, Inc.",
+  "invoice_number": "INV-2026-00427",
+  "invoice_date": "2026-05-29",
+  "due_date": "2026-06-28",
+  "currency": "USD",
+  "line_items": [...],
+  "subtotal": 3774.94,
+  "tax": 328.42,
+  "total": 4103.36
+}
+```
 
-## SharePoint MCP tool catalog
+## Clean up
 
-The Work IQ SharePoint MCP server (`workiqsharepoint`) is what the
-sandbox actually calls. The runtime catalog (35 tools) covers
-sites, libraries (drives), folders, files, list items, columns, and
-sharing. The prompt in `host/prompt.md` walks Copilot through these
-specific tools so the model doesn't waste tokens on tool discovery:
+⚠️ **While this sample is deployed**, every new file in the
+configured SharePoint library wakes the sandbox and Copilot CLI
+runs against it — that consumes GitHub Models tokens, SharePoint
+MCP calls, and a few seconds of sandbox compute per event. Fine
+for a hands-on demo; you almost certainly don't want it running
+indefinitely against your real library. Tear the sample down when
+you're done:
+
+```bash
+azd down --purge --force
+```
+
+---
+
+## How it works (end-to-end)
+
+```
+        ┌─────────────────────────────┐
+        │  📄 New file lands in       │
+        │  /<input folder>/           │
+        └──────────────┬──────────────┘
+                       │   polled every 1 min
+                       ▼
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  Connector Gateway  (westcentralus)                             │
+ │  ├─ sharepointonline connection  (OAuth → your SP site)         │
+ │  ├─ workiqsharepoint connection  (OAuth → your SP site, MCP)    │
+ │  ├─ mcpserverConfig (kind=ManagedMcpServer, workiqsharepoint)   │
+ │  └─ triggerConfig (GetOnNewFileItems)                           │
+ │       authentication: ManagedServiceIdentity                    │
+ │         identity  = gateway MI                                  │
+ │         audience  = https://auth.adcproxy.io/                   │
+ │       callbackUrl = https://<sbxId>--8080.<region>.adcproxy.io  │
+ │       body        = @triggerBody()                              │
+ └────────────────────────────┬────────────────────────────────────┘
+                              │
+                              │  POST callbackUrl
+                              │  Authorization: Bearer <MI token>
+                              │    aud = https://auth.adcproxy.io/
+                              │    oid = gateway MI principalId
+                              ▼
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  adcproxy.io  (per-sandbox HTTPS, Entra-restricted)             │
+ │    auth.entraId.objectIds = [ gateway MI principalId ]          │
+ │    activationMode         = OnDemand                            │
+ │    → wake sandbox if cold, forward POST to :8080                │
+ └────────────────────────────┬────────────────────────────────────┘
+                              ▼
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  Sandbox  (Firecracker microVM, Ubuntu base)                    │
+ │                                                                 │
+ │   ┌─────────────────────────────────────────────────────────┐   │
+ │   │ listener.py   (FastAPI :8080)                           │   │
+ │   │   self-loop guard:                                      │   │
+ │   │     skip if inside output folder OR name ends .json     │   │
+ │   │   input-folder filter:                                  │   │
+ │   │     skip if not under SHAREPOINT_INPUT_FOLDER           │   │
+ │   │   else: spawn copilot --allow-all-tools -p prompt.md    │   │
+ │   └────────────────────────┬────────────────────────────────┘   │
+ │                            ▼                                    │
+ │   ┌─────────────────────────────────────────────────────────┐   │
+ │   │ GitHub Copilot CLI v1.x   (LLM = GitHub Models)         │   │
+ │   │   SharePoint MCP tools, in order per request:           │   │
+ │   │     getSiteByPath          → siteId                     │   │
+ │   │     listDocumentLibrariesInSite → documentLibraryId     │   │
+ │   │     getFolderChildren      → fileId (DriveItem)         │   │
+ │   │     readSmallBinaryFile    → base64 bytes               │   │
+ │   │   shell: pdftotext / pdftoppm + tesseract OCR fallback  │   │
+ │   │   agent: produce normalized invoice JSON                │   │
+ │   │     createFolder (if /<output folder>/ missing)         │   │
+ │   │     createSmallTextFile → upload <name>.json            │   │
+ │   └────────────────────────┬────────────────────────────────┘   │
+ │                            ▼                                    │
+ │   ┌─────────────────────────────────────────────────────────┐   │
+ │   │ egress proxy  (Deny default + Transform rules)          │   │
+ │   │   X-API-Key:     <gateway MCP key>  on MCP host         │   │
+ │   │   Authorization: token <PAT>        on GitHub hosts     │   │
+ │   │   → sandbox holds NO MCP key; key stamped at boundary   │   │
+ │   └────────────────────────┬────────────────────────────────┘   │
+ └────────────────────────────┼────────────────────────────────────┘
+                              ▼
+ ┌─────────────────────────────────────────────────────────────────┐
+ │  Connector Gateway MCP runtime → workiqsharepoint backend       │
+ │  → Microsoft Graph (using the SharePoint connection's OAuth)    │
+ │  → write <filename>.json into /<output folder>/                 │
+ └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Security model
+
+Two SharePoint OAuth connections (one per gateway capability), one
+sandbox-side managed identity, and **no SharePoint credentials
+inside the sandbox**.
+
+| Component | Purpose |
+|---|---|
+| **Connector Gateway MI** | Mints the bearer token attached to every trigger POST to the sandbox proxy. Granted `Container Apps SandboxGroup Data Owner` on the sandbox group so the proxy can wake the sandbox on demand. |
+| **Sandbox group MI** | Sandbox-side identity (used by the proxy + by `set_egress_policy` when post-deploy applies the Deny default). |
+| **sharepointonline connection** | OAuth-authorized to your SharePoint site. Used **only** by the trigger config — receives change notifications from SharePoint. |
+| **workiqsharepoint connection** | OAuth-authorized to your SharePoint site. Used **only** by the MCP server — the sandbox calls JSON-RPC tools (`getSiteByPath`, `readSmallBinaryFile`, `createSmallTextFile`) through this. |
+| **mcpserverConfig (`kind: ManagedMcpServer`)** | The gateway-published MCP HTTP endpoint the sandbox connects to. Authenticates with `X-API-Key` (stamped by the egress proxy). |
+| **Egress proxy** | Deny default + Transform rules. Holds the MCP `X-API-Key` and the GitHub `Authorization` token. Stamps headers on outbound requests — the sandbox process never sees them. |
+
+### What's enforced — and where
+
+Three independent checks gate this flow; each is short-lived and
+audience-scoped:
+
+1. **Trigger → sandbox** — `adcproxy.io` validates the gateway
+   MI's bearer token (signature, `iss`, `aud=https://auth.adcproxy.io/`,
+   `oid ∈ port.entraId.objectIds`). Wrong `oid` ⇒ **403**, no
+   token ⇒ **401**.
+2. **Sandbox → MCP** — the gateway MCP HTTP endpoint requires
+   `X-API-Key`. The sandbox doesn't have the key; the egress proxy
+   stamps it on every outbound request to the MCP host. A request
+   leaving the sandbox to any other host without a matching
+   Transform rule is dropped by the Deny default.
+3. **MCP → SharePoint** — the upstream `workiqsharepoint` MCP
+   server uses the connection's OAuth token (acquired once at deploy
+   via `az connector-namespace connection authorize`) to call
+   Microsoft Graph. The token never leaves the gateway's runtime.
+
+The sandbox holds **no SharePoint credential, no MCP API key**.
+Compromise of the sandbox process leaks only the GitHub PAT
+(needed locally by Copilot CLI to authenticate to GitHub Models
+*before any network call* — see [Going further](#going-further-per-file-child-sandboxes)
+for why this trade-off exists and the path off it).
+
+### Where the gateway API key lives
+
+| Location | Holds gateway API key? |
+|---|---|
+| Bicep state / azd deployment state | ❌ |
+| Operator shell history | ❌ |
+| Connector Gateway control plane | ✅ (issued by `listApiKey`) |
+| Sandbox env / disk / memory | ❌ |
+| Sandbox egress proxy | ✅ |
+| Outbound MCP request on the wire | ✅ (stamped by proxy) |
+
+---
+
+## SharePoint MCP tool reference
+
+The Work IQ SharePoint MCP server (`workiqsharepoint`) publishes
+35 tools. The prompt in [`host/prompt.md`](host/prompt.md) walks
+Copilot through the six it actually needs, so the model doesn't
+waste tokens on `tools/list`:
 
 | Tool | Purpose |
 |---|---|
 | `getSiteByPath(hostname, serverRelativePath)` | Resolve the configured site URL → `siteId` |
 | `listDocumentLibrariesInSite(siteId)` | List drives in the site → pick the `documentLibraryId` |
-| `getFolderChildren(documentLibraryId, parentFolderId=root)` | List files in a folder; match `FileLeafRef` to find the new file's drive item id |
+| `getFolderChildren(documentLibraryId, parentFolderId="root")` | Enumerate a folder; match `FileLeafRef` to find the new file's DriveItem id |
 | `readSmallBinaryFile(fileId, documentLibraryId)` | Download bytes (returns base64; agent decodes) |
 | `createFolder(...)` | Create the output folder if it doesn't exist |
 | `createSmallTextFile(filename, contentText, documentLibraryId, parentfolderId)` | Upload the extracted result JSON |
 
-NOTE: the `ID` in the trigger payload is the **SharePoint list item
-ID**, NOT the **DriveItem ID** that the MCP file-content tools
-need. The prompt walks Copilot through the site → drive → folder
-lookup to translate.
+The trigger payload's `ID` field is the SharePoint **list item ID**,
+which is **not** the **DriveItem ID** that file tools require. The
+prompt walks Copilot through the site → drive → folder lookup to
+translate.
+
+---
+
+## Re-iterating without `azd up`
+
+For prompt or listener tweaks you don't need a full provision —
+the post-deploy script also exposes a `--skip-oauth` mode that
+hot-reloads the sandbox without re-popping the OAuth tabs:
+
+```bash
+python infra/scripts/postdeploy.py --skip-oauth
+```
+
+This re-uploads `host/*` into the existing sandbox, re-applies the
+egress policy + transforms, restarts uvicorn, refreshes the port
+registration, and re-PUTs the trigger config.
+
+---
+
+## Why a sandbox (and not a Function App)
+
+| | Azure Functions | This sandbox |
+|---|---|---|
+| `apt install poppler-utils tesseract-ocr` per request | painful (custom container, slow cold start) | one-line in `bootstrap.sh` |
+| Let the LLM **write and execute fresh Python** per document | RCE against the Function host | the point — Firecracker isolation |
+| Parse a possibly-malicious PDF (CVE exposure) | shared blast radius | one microVM, neighbors unaffected |
+| Memory-hungry OCR on multi-page scans | tight consumption limits | per-VM CPU/RAM |
+| Deny-default egress per invocation | not really | yes — extracted data goes only where we allow |
+| **The webhook target itself** | needs the Function App to host the receiver | the sandbox **is** the webhook target |
+
+---
 
 ## Going further: per-file child sandboxes
 
-The shipped design uses **one long-lived host sandbox** that processes
-files in series. The sandbox is isolated from any other tenant in the
-sandbox group, but multiple files from the same SharePoint library
-share the same Firecracker VM (in workspaces `/work/<run-id>/`).
+The shipped design uses one long-lived host sandbox that serializes
+requests through Copilot CLI. The sandbox is isolated from any
+other tenant in the sandbox group, but multiple files from the same
+SharePoint library share the same Firecracker VM (in per-run
+workspaces `/work/<run_id>/`).
 
 For **true per-file isolation** — one Firecracker VM per invoice,
 destroyed after — the host listener would spawn a child sandbox per
 incoming trigger. That requires an Azure credential **inside** the
-host sandbox (to call `Microsoft.App/sandboxGroups/.../begin_create_sandbox`).
-Whether sandboxes expose IMDS / a managed identity in this preview
-is not yet confirmed. When that lands, the change is roughly:
+host sandbox to call `Microsoft.App/sandboxGroups/.../begin_create_sandbox`.
+Whether sandboxes expose IMDS / an attached MI in this preview is
+not yet confirmed. When that lands, the listener becomes a tiny
+dispatcher and the GitHub PAT trade-off goes away too (each child
+sandbox gets its own egress policy that injects the PAT inline at
+the boundary).
 
-```python
-async def _process_one(file_props, run_id):
-    child = await sg_client.begin_create_sandbox(...).result()
-    try:
-        await _apply_egress(child)
-        await child.write_file("/work/prompt.md", prompt)
-        await child.exec("copilot --allow-all-tools -p $(cat /work/prompt.md)")
-    finally:
-        await child.delete()
-```
-
-The host sandbox becomes a tiny dispatcher; per-file workloads each
-get their own kernel + their own deny-default egress. Drop-in
-upgrade once the credential plumbing is figured out.
-
-## Why a sandbox (and not a Function App)?
-
-| Capability | Azure Functions | Sandbox |
-|---|---|---|
-| `apt install poppler-utils tesseract-ocr` per request | painful (custom container, slow cold start) | trivial |
-| **Let the LLM write & execute fresh Python per document** | not possible (RCE against the Function host) | the whole point — Firecracker isolation |
-| Parse a possibly-malicious PDF (CVE exposure) | shared host blast radius | one microVM dies, neighbors unaffected |
-| Memory-hungry OCR on multi-page scans | tight consumption limits | per-VM CPU/RAM |
-| Deny-default egress per invocation | no | yes — extracted data can ONLY go where we say |
-| **Direct webhook target** (no glue compute) | needs the Function App itself as the receiver | the sandbox IS the webhook target |
+---
 
 ## Related
 
 - [Scenario 10 — connectors-email-triage](../10-connectors-email-triage/README.md)
-  — same Connector Gateway + ACA Sandbox primitives, but with an
-  ACA receiver in the middle and Teams MCP as the output sink. Read
-  10 first for the security-model deep-dive; this one is the
+  — same gateway + sandbox primitives, but with an **ACA receiver
+  in the middle** and Teams MCP as the output sink. Read 10 first
+  for the receiver-mediated pattern; this scenario is the
   no-receiver evolution.
 - [Microsoft Functions reference sample
-  (functions-connectors-net-e2e-email-users-teams)](https://github.com/Azure-Samples/functions-connectors-net-e2e-email-users-teams)
-  — comparable end-to-end flow built on Functions; useful to compare
-  the dev experience.
+  (functions-connectors-net-builtinauth)](https://github.com/Azure-Samples/functions-connectors-net-builtinauth)
+  — the closest Functions-based comparable. Useful to compare the
+  security model and developer experience.
