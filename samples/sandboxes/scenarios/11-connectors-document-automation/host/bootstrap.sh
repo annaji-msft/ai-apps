@@ -70,36 +70,39 @@ fi
 # or /usr/local/bin — pin both on PATH in the unit).
 COPILOT_PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
-# ---- 4. systemd unit ----------------------------------------------------
-echo -e "${YELLOW}==> writing /etc/systemd/system/listener.service${NC}"
+# ---- 4. Launch listener under nohup -------------------------------------
+# Sandboxes don't run systemd ("'systemd' is not running in this
+# container due to its overhead"), so we can't use a systemd unit.
+# nohup is fine for a single long-lived process — sandbox lifecycle
+# is managed by the platform (it's restarted with the sandbox itself
+# when the OnDemand proxy wakes it), so we don't need auto-restart.
 
-cat >/etc/systemd/system/listener.service <<EOF
-[Unit]
-Description=sandboxes-connectors-document-automation listener
-After=network-online.target
-Wants=network-online.target
+# Kill any previous instance (idempotent re-run)
+pkill -f 'uvicorn listener:app' 2>/dev/null || true
+sleep 1
 
-[Service]
-Type=simple
-WorkingDirectory=/opt/listener
-Environment=PATH=/opt/listener/.venv/bin:${COPILOT_PATH}
-Environment=PYTHONUNBUFFERED=1
-Environment=SHAREPOINT_MCP_URL=${SHAREPOINT_MCP_URL}
-Environment=SHAREPOINT_SITE_URL=${SHAREPOINT_SITE_URL:-}
-Environment=SHAREPOINT_LIBRARY_ID=${SHAREPOINT_LIBRARY_ID:-}
-Environment=SHAREPOINT_OUTPUT_FOLDER=${SHAREPOINT_OUTPUT_FOLDER:-Extracted}
-Environment=COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
-ExecStart=/opt/listener/.venv/bin/uvicorn listener:app --host 0.0.0.0 --port 8080
-Restart=always
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
+# Write the env file the listener reads. We don't bake env into the
+# nohup command line because secrets would show up in /proc/N/cmdline.
+mkdir -p /opt/listener
+cat >/opt/listener/.env <<EOF
+SHAREPOINT_MCP_URL=${SHAREPOINT_MCP_URL}
+SHAREPOINT_SITE_URL=${SHAREPOINT_SITE_URL:-}
+SHAREPOINT_LIBRARY_ID=${SHAREPOINT_LIBRARY_ID:-}
+SHAREPOINT_OUTPUT_FOLDER=${SHAREPOINT_OUTPUT_FOLDER:-Extracted}
+COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
 EOF
+chmod 600 /opt/listener/.env
 
-systemctl daemon-reload
-systemctl enable listener.service
-systemctl restart listener.service
+# Launch under nohup, log to /var/log/listener.log
+cd /opt/listener
+mkdir -p /var/log
+set -a
+# shellcheck disable=SC1091
+. /opt/listener/.env
+set +a
+export PATH="/opt/listener/.venv/bin:${COPILOT_PATH}"
+nohup /opt/listener/.venv/bin/uvicorn listener:app --host 0.0.0.0 --port 8080 \
+    >/var/log/listener.log 2>&1 &
 
 # ---- 5. Wait for /healthz before returning success ----------------------
 echo -e "${YELLOW}==> waiting for listener /healthz...${NC}"
@@ -111,6 +114,6 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-echo -e "${RED}error: listener never became healthy. journalctl -u listener -n 100:${NC}" >&2
-journalctl -u listener.service -n 100 --no-pager >&2 || true
+echo -e "${RED}error: listener never became healthy. last 100 lines of /var/log/listener.log:${NC}" >&2
+tail -n 100 /var/log/listener.log >&2 || true
 exit 1

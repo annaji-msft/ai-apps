@@ -10,6 +10,9 @@
     },
     "sandboxRegion": {
       "value": "${ACA_SANDBOX_REGION=westus2}"
+    },
+    "operatorPrincipalId": {
+      "value": "${AZURE_PRINCIPAL_ID}"
     }
   }
 }

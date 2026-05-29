@@ -89,12 +89,20 @@ GITHUB_TRANSFORM_HOSTS = (
 )
 
 
+import shutil
+
+# On Windows, `az` is `az.cmd`, not `az.exe` — `subprocess.run(["az", ...])`
+# fails with FileNotFoundError unless we resolve via shutil.which or
+# pass shell=True. Resolve once at import.
+_AZ = shutil.which("az") or shutil.which("az.cmd") or shutil.which("az.exe") or "az"
+
+
 # ---- Shell helpers --------------------------------------------------------
 
 def az_json(*args: str, allow_fail: bool = False) -> Any:
     """Invoke `az` and parse JSON output."""
     result = subprocess.run(
-        ["az", *args, "--output", "json"],
+        [_AZ, *args, "--output", "json"],
         capture_output=True, text=True, check=False,
     )
     if result.returncode != 0:
@@ -109,7 +117,7 @@ def az_rest(method: str, uri: str, body: dict | None = None) -> Any:
     """Invoke `az rest` with a JSON body via a temp file (PowerShell
     on Windows mangles inline JSON — see scenario 10 notes)."""
     import tempfile
-    args = ["az", "rest", "--method", method, "--uri", uri]
+    args = [_AZ, "rest", "--method", method, "--uri", uri]
     if body is not None:
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", suffix=".json", delete=False
@@ -205,8 +213,8 @@ def step_get_or_create_host_sandbox(cfg: dict[str, Any]) -> tuple[Any, str]:
         endpoint=endpoint_for_region(cfg["sandboxGroupRegion"]),
         credential=cred,
         subscription_id=cfg["AZURE_SUBSCRIPTION_ID"],
-        resource_group_name=cfg["resourceGroupName"],
-        sandbox_group_name=cfg["sandboxGroupName"],
+        resource_group=cfg["resourceGroupName"],
+        sandbox_group=cfg["sandboxGroupName"],
     )
 
     target_labels = {
@@ -214,23 +222,33 @@ def step_get_or_create_host_sandbox(cfg: dict[str, Any]) -> tuple[Any, str]:
         "role": "listener",
     }
 
-    async def find_or_create() -> Any:
+    async def find_or_create() -> tuple[Any, str]:
         async for sbx in sg_client.list_sandboxes():
             labels = getattr(sbx, "labels", None) or {}
             if labels.get("role") == "listener" and labels.get("scenario") == "connectors-document-automation":
-                log.info("    reusing existing sandbox id=%s", sbx.sandbox_id)
-                return sbx
+                log.info("    reusing existing sandbox id=%s state=%s", sbx.id, getattr(sbx, "state", "?"))
+                # list_sandboxes returns metadata only; get_sandbox_client
+                # gives us an operational client (exec, write_file, ...).
+                client = sg_client.get_sandbox_client(sbx.id)
+                # OnDemand-activation sandboxes may be Stopped between
+                # trigger events. We need it Running to upload code
+                # and run bootstrap. ensure_running is idempotent.
+                await client.ensure_running()
+                return client, sbx.id
         log.info("    no existing listener sandbox found; creating one")
         poller = await sg_client.begin_create_sandbox(
             disk="ubuntu", cpu="2000m", memory="4096Mi",
             labels=target_labels,
         )
-        sandbox = await poller.result()
-        log.info("    sandbox created id=%s", sandbox.sandbox_id)
-        return sandbox
+        created = await poller.result()
+        sandbox_id = getattr(created, "id", None) or getattr(created, "sandbox_id", None)
+        log.info("    sandbox created id=%s", sandbox_id)
+        client = sg_client.get_sandbox_client(sandbox_id)
+        await client.ensure_running()
+        return client, sandbox_id
 
-    sandbox = loop.run_until_complete(find_or_create())
-    return sandbox, sandbox.sandbox_id
+    sandbox, sandbox_id = loop.run_until_complete(find_or_create())
+    return sandbox, sandbox_id
 
 
 def step_upload_listener(sandbox: Any) -> None:
@@ -242,8 +260,16 @@ def step_upload_listener(sandbox: Any) -> None:
         await sandbox.exec("mkdir -p /opt/listener /work")
         for name in files:
             src = here / name
+            data = src.read_bytes()
+            # bootstrap.sh and any other shell script MUST have LF
+            # line endings. On Windows, git checkout converts to CRLF
+            # by default; uploaded as-is, `bash` errors with
+            #   "$'\r': command not found" and "set: pipefail: invalid option"
+            # because the CR is part of the first command word.
+            if name.endswith((".sh", ".py")):
+                data = data.replace(b"\r\n", b"\n")
             dst = f"/opt/listener/{name}"
-            await sandbox.write_file(dst, src.read_bytes())
+            await sandbox.write_file(dst, data)
         await sandbox.exec("chmod +x /opt/listener/bootstrap.sh")
     asyncio.get_event_loop().run_until_complete(upload_all())
 
@@ -311,6 +337,18 @@ def step_run_bootstrap(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
     log.info("==> [6/9] running bootstrap.sh inside sandbox (~30-90s)")
     import asyncio
 
+    # On re-runs, the sandbox already has the Deny egress + transforms
+    # from a previous step_apply_egress. apt-get / pip / curl all hit
+    # hosts that aren't in the allowlist, so reset to Allow before
+    # running bootstrap. step_apply_egress re-applies Deny + transforms
+    # afterwards.
+    async def open_egress() -> None:
+        try:
+            await sandbox.set_egress_default("Allow")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("    set_egress_default(Allow) before bootstrap failed (continuing): %s", exc)
+    asyncio.get_event_loop().run_until_complete(open_egress())
+
     env_exports = " ".join(
         f"{k}='{v}'" for k, v in {
             "SHAREPOINT_MCP_URL": mcp_url,
@@ -334,8 +372,19 @@ def step_run_bootstrap(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
 
 def step_register_port(cfg: dict[str, Any], sandbox_id: str) -> str:
     log.info("==> [7/9] registering port 8080 with ADC proxy (Entra-restricted to gateway MI)")
+    # The Python SDK's add_port / update_ports only exposes
+    # PortAuthEntraId(enabled, emails) — no objectIds/tenantIds field
+    # for restricting to a specific service principal. We need
+    # objectIds to lock the port down to the gateway MI (per the HAR
+    # capture). Hit the REST endpoint directly with httpx + a
+    # DefaultAzureCredential token scoped to the data plane.
+    import asyncio
+    import httpx
+    from azure.identity.aio import DefaultAzureCredential
+
     region = cfg["sandboxGroupRegion"]
-    url = f"https://{ADC_PROXY_HOST_TEMPLATE.format(sandbox_id=sandbox_id, port=8080, region=region)}"
+    proxy_host = ADC_PROXY_HOST_TEMPLATE.format(sandbox_id=sandbox_id, port=8080, region=region)
+    url = f"https://{proxy_host}"
     body = {
         "ports": [{
             "port": 8080,
@@ -352,15 +401,32 @@ def step_register_port(cfg: dict[str, Any], sandbox_id: str) -> str:
             "protocol": "Http",
         }],
     }
-    # Per the HAR, the real endpoint is on management.<region>.azuredevcompute.io
     arm = (
         f"https://management.{region}.azuredevcompute.io"
         f"/subscriptions/{cfg['AZURE_SUBSCRIPTION_ID']}"
         f"/resourceGroups/{cfg['resourceGroupName']}"
         f"/sandboxGroups/{cfg['sandboxGroupName']}"
         f"/sandboxes/{sandbox_id}/ports"
+        f"?api-version={SANDBOX_GROUP_API_VERSION}"
     )
-    az_rest("put", arm, body=body)
+
+    async def do_put() -> None:
+        cred = DefaultAzureCredential()
+        try:
+            tok = await cred.get_token("https://dynamicsessions.io/.default")
+            async with httpx.AsyncClient(timeout=60) as http:
+                resp = await http.put(
+                    arm,
+                    json=body,
+                    headers={"Authorization": f"Bearer {tok.token}",
+                             "Content-Type": "application/json"},
+                )
+            if resp.status_code >= 400:
+                log.error("PUT /ports failed status=%d body=%s", resp.status_code, resp.text)
+                sys.exit(2)
+        finally:
+            await cred.close()
+    asyncio.get_event_loop().run_until_complete(do_put())
     log.info("    port URL: %s", url)
     return url
 
@@ -425,13 +491,13 @@ def step_authorize_connections(cfg: dict[str, Any]) -> None:
     log.info("==> [9/9] authorizing connections (browser tabs)")
     # Install connector-namespace ext if missing
     show = subprocess.run(
-        ["az", "extension", "show", "--name", "connector-namespace"],
+        [_AZ, "extension", "show", "--name", "connector-namespace"],
         capture_output=True, text=True, check=False,
     )
     if show.returncode != 0:
         log.info("    installing 'connector-namespace' az CLI extension")
         subprocess.run(
-            ["az", "extension", "add", "--source", CONNECTOR_NS_EXT_WHEEL, "--yes"],
+            [_AZ, "extension", "add", "--source", CONNECTOR_NS_EXT_WHEEL, "--yes"],
             check=True,
         )
 
@@ -441,7 +507,7 @@ def step_authorize_connections(cfg: dict[str, Any]) -> None:
     ):
         log.info("    authorizing %s (%s)", label, conn_name)
         subprocess.run([
-            "az", "connector-namespace", "connection", "authorize",
+            _AZ, "connector-namespace", "connection", "authorize",
             "--resource-group", cfg["resourceGroupName"],
             "--namespace-name", cfg["connectorGatewayName"],
             "--name", conn_name,
@@ -487,8 +553,13 @@ def main() -> int:
     mcp_url = step_resolve_mcp_url(cfg)
     sandbox, sandbox_id = step_get_or_create_host_sandbox(cfg)
     step_upload_listener(sandbox)
-    step_apply_egress(sandbox, cfg, mcp_url)
+    # Run bootstrap BEFORE applying egress lockdown. apt-get update +
+    # pip install + copilot-install all hit hosts (archive.ubuntu.com,
+    # pypi.org, gh.io, etc.) that the deny-default policy would block
+    # unless we maintained an explicit allowlist. Same ordering scenario
+    # 10's receiver uses for its Copilot install.
     step_run_bootstrap(sandbox, cfg, mcp_url)
+    step_apply_egress(sandbox, cfg, mcp_url)
     callback_url = step_register_port(cfg, sandbox_id)
     step_create_trigger(cfg, sandbox_id, callback_url)
     if not args.skip_oauth:

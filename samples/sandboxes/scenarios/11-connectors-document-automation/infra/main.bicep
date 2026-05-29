@@ -35,6 +35,9 @@ param location string = resourceGroup().location
 @description('Azure region for the sandbox group. Must be a region where ACA sandboxes are available (e.g., westus2). Can differ from `location`.')
 param sandboxRegion string = location
 
+@description('Principal ID of the operator running azd up. Granted Container Apps SandboxGroup Data Owner on the sandbox group so post-deploy can create + manage the host sandbox. Wired by main.parameters.json to azd built-in AZURE_PRINCIPAL_ID.')
+param operatorPrincipalId string = ''
+
 @description('Tags applied to every resource.')
 param tags object = {
   'azd-env-name': environmentName
@@ -97,12 +100,13 @@ module sandboxGroup 'modules/sandbox-group.bicep' = {
   }
 }
 
-// ---- 6. RBAC: Gateway MI -> Sandbox Group Data Owner -------------------
+// ---- 6. RBAC: Gateway MI + operator -> Sandbox Group Data Owner --------
 module gatewaySandboxRbac 'modules/gateway-sandbox-rbac.bicep' = {
   name: 'gateway-sandbox-rbac'
   params: {
     sandboxGroupName: sandboxGroup.outputs.name
-    principalId: gateway.outputs.principalId
+    gatewayPrincipalId: gateway.outputs.principalId
+    operatorPrincipalId: operatorPrincipalId
   }
 }
 
