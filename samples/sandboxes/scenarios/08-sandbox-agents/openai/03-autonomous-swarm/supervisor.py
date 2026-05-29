@@ -26,6 +26,11 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 # ---------------------------------------------------------------------------
 # Pin TLS trust store to the sandbox's SYSTEM CA bundle BEFORE any HTTP lib
 # is imported. The ACA sandbox runtime transparently proxies outbound HTTPS

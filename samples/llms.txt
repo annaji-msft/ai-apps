@@ -68,7 +68,13 @@ that uses these samples.
   is attached to outbound requests by the egress proxy and never
   enters the sandbox. Claude Code / Codex stubs included.
 - [03-code-interpreter](sandboxes/scenarios/03-code-interpreter/README.md):
-  LLM-driven code execution — generate, run, observe, iterate.
+  LLM-driven Python execution. Azure OpenAI drives a multi-turn
+  `chat.completions` + tool-calling loop where each `python_exec` runs
+  inside a fresh ACA microVM (Python disk + pandas/matplotlib). Includes
+  a sample sales CSV, automatic artifact (plot) retrieval to the host's
+  `./out/`, and explicit "deny-default egress" guidance. Same shape as
+  OpenAI Code Interpreter, but the data and the sandbox stay in your
+  tenant. `openai/` variant ships; `anthropic/` planned.
 - [04-swarms](sandboxes/scenarios/04-swarms/README.md):
   Orchestrator coordinating many sandbox workers. Variant
   [`01-sandbox-inception`](sandboxes/scenarios/04-swarms/01-sandbox-inception/README.md)
@@ -80,9 +86,23 @@ that uses these samples.
   durable shared scratchpad: workers stream JSON checkpoints, an
   aggregator sandbox lists the prefix after workers are gone).
 - [05-data-processing](sandboxes/scenarios/05-data-processing/README.md):
-  Producer/consumer pipelines on shared AzureBlob volumes.
+  Producer/consumer ETL pipeline on a shared AzureBlob volume. A
+  producer sandbox streams synthetic event batches into
+  `/mnt/shared/raw/` while a transformer sandbox concurrently enriches
+  them into `/mnt/shared/processed/`; an aggregator then summarises
+  everything. All three workers are pure stdlib (`open()`, `glob`,
+  `json`) — no Azure Blob SDK, no SAS tokens. Demonstrates
+  stream-while-process, atomic writes via `os.replace`, `.done/`
+  archive pattern, and zero blob plumbing. Composes guides 01 + 04.
 - [06-developer-workflows](sandboxes/scenarios/06-developer-workflows/README.md):
-  PR builds, ephemeral CI, on-demand dev environments.
+  Ephemeral CI runner pattern — cold-boot a base sandbox, `pip install
+  pytest`, snapshot the resulting "warm runner" image, then for each
+  pending PR create a fresh sandbox from the snapshot, upload the PR
+  diff with `write_file`, run `pytest`, and report pass/fail. Three
+  synthetic PRs ship (2 pass, 1 with a deliberate `mul()` regression
+  the tests catch) so first-time readers see both code paths. Exit
+  code follows CI conventions (0 / 2 / 1). Composes guides 01
+  (sandboxes) + 02 (snapshots) + 07 (files).
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
 - [07-computer-use](sandboxes/scenarios/07-computer-use/README.md):
   LLM computer-use agent driving a Linux desktop inside a sandbox.

@@ -51,6 +51,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from helpers.model_provider import build_azure_openai_model  # noqa: E402
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 DEFAULT_REPO = "https://github.com/Azure/azure-functions-host"
 DEFAULT_QUESTION = "What is this repository about? Summarize its main purpose and structure."
 

@@ -33,6 +33,11 @@ from azure.containerapps.sandbox import (
     endpoint_for_region,
 )
 
+# Make unicode prints (→, π, ≈, ●) work on Windows cp1252 terminals.
+for _s in (sys.stdout, sys.stderr):
+    if hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8")
+
 # Pin versions for reproducibility — DAB MCP behavior is still evolving and
 # Chinook upstream master may change schema names.
 DAB_VERSION = "1.7.93"
