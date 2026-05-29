@@ -1,0 +1,11 @@
+{
+  "ID": 42,
+  "FileLeafRef": "invoice-acme-2026-001.pdf",
+  "FileRef": "/teams/Finance/Invoices/Inbox/invoice-acme-2026-001.pdf",
+  "{Identifier}": "%252fteams%252fFinance%252fInvoices%252fInbox%252finvoice-acme-2026-001.pdf",
+  "Modified": "2026-05-28T22:00:00Z",
+  "Editor": {
+    "Email": "alice@contoso.com",
+    "DisplayName": "Alice Example"
+  }
+}

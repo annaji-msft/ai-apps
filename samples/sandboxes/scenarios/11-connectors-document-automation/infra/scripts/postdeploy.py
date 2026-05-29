@@ -1,0 +1,501 @@
+"""postdeploy.py — finishes the runtime wiring for scenario 11.
+
+Driven by `postdeploy.sh` / `postdeploy.ps1` so the same logic runs
+on macOS / Linux / Windows. Reads `azd env get-values --output json`
+on stdin (the wrappers pipe it in), uses the Azure SDK + Azure CLI
+where appropriate.
+
+Steps (idempotent — re-running is safe):
+
+  1.  Read azd outputs (subscription, RG, gateway, MCP config,
+      sandbox group, plus the operator-supplied SHAREPOINT_* and
+      GITHUB_PAT env values).
+  2.  Resolve the SharePoint MCP runtime URL from the gateway
+      data plane.
+  3.  Create or reuse the host sandbox in the sandbox group
+      (we tag it `scenario=connectors-document-automation,
+      role=listener` so re-runs find it).
+  4.  Upload listener.py + prompt.md + requirements.txt +
+      bootstrap.sh into the sandbox.
+  5.  Apply egress policy: Deny default + Transform stamping
+      X-API-Key on the MCP host, + Transform stamping
+      Authorization on the three GitHub Copilot CLI hosts (mirrors
+      scenario 10).
+  6.  Run bootstrap.sh inside the sandbox (with all the SHAREPOINT_*
+      and COPILOT_GITHUB_TOKEN env vars). Bootstrap installs the
+      toolchain + starts uvicorn under systemd.
+  7.  Register port 8080 with the ADC proxy: PUT /ports with
+      `auth.entraId.objectIds = [<gateway MI principalId>]` so the
+      gateway is the only caller the proxy will allow.
+  8.  Create or update the gateway trigger config — callbackUrl =
+      `https://<sandboxId>--8080.<region>.adcproxy.io`, metadata =
+      `{sandboxGroupName, sandboxId}`.
+  9.  Run the OAuth consent flow for the SharePoint connection and
+      the workiqsharepoint MCP connection (opens browser tabs).
+ 10.  Print final summary + how to test.
+
+Everything is best-effort idempotent. If step 5 fails because the
+egress policy was already set, we log and continue. Same for the
+role assignment (already done by Bicep) and the trigger config (uses
+PUT).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import subprocess
+import sys
+import textwrap
+import time
+from pathlib import Path
+from typing import Any
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stdout,
+)
+log = logging.getLogger("postdeploy")
+
+
+# ---- Constants -----------------------------------------------------------
+
+CONNECTOR_GATEWAY_API_VERSION = "2026-05-01-preview"
+SANDBOX_GROUP_API_VERSION = "2026-02-01-preview"
+
+# ADC proxy endpoint domain. The ports API and the per-sandbox proxy
+# URL both live here. Per the HAR capture, port URLs follow the
+# pattern: https://<sandboxId>--<port>.<region>.adcproxy.io
+ADC_PROXY_HOST_TEMPLATE = "{sandbox_id}--{port}.{region}.adcproxy.io"
+
+# Audience the gateway MUST mint its MI token for when calling the
+# sandbox via the proxy. From the HAR.
+ADC_PROXY_AUDIENCE = "https://auth.adcproxy.io/"
+
+CONNECTOR_NS_EXT_WHEEL = (
+    "https://github.com/anthonychu/azure-cli-extensions/releases"
+    "/download/connector-namespace-0.1.0"
+    "/connector_namespace-0.1.0-py2.py3-none-any.whl"
+)
+
+# GitHub host families Copilot CLI talks to — mirror scenario 10.
+GITHUB_TRANSFORM_HOSTS = (
+    ("api.github.com",                         "token",  "github-api-auth"),
+    ("api.enterprise.githubcopilot.com",       "Bearer", "copilot-enterprise-auth"),
+    ("telemetry.enterprise.githubcopilot.com", "Bearer", "copilot-telemetry-auth"),
+)
+
+
+# ---- Shell helpers --------------------------------------------------------
+
+def az_json(*args: str, allow_fail: bool = False) -> Any:
+    """Invoke `az` and parse JSON output."""
+    result = subprocess.run(
+        ["az", *args, "--output", "json"],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        if allow_fail:
+            return None
+        log.error("az %s failed:\n%s", " ".join(args), result.stderr.strip())
+        sys.exit(2)
+    return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def az_rest(method: str, uri: str, body: dict | None = None) -> Any:
+    """Invoke `az rest` with a JSON body via a temp file (PowerShell
+    on Windows mangles inline JSON — see scenario 10 notes)."""
+    import tempfile
+    args = ["az", "rest", "--method", method, "--uri", uri]
+    if body is not None:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", suffix=".json", delete=False
+        ) as f:
+            json.dump(body, f)
+            body_path = f.name
+        args += ["--body", f"@{body_path}", "--headers", "Content-Type=application/json"]
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        log.error("az rest %s %s failed:\n%s", method, uri, result.stderr.strip())
+        sys.exit(2)
+    return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def sandbox_exec(sandbox: Any, command: str, *, timeout_s: float = 120) -> Any:
+    """Exec a shell command inside the sandbox via the SDK."""
+    import asyncio
+    return asyncio.get_event_loop().run_until_complete(
+        sandbox.exec(command, timeout=timeout_s)
+    )
+
+
+# ---- Main steps -----------------------------------------------------------
+
+def step_resolve_inputs() -> dict[str, Any]:
+    log.info("==> [1/9] reading azd outputs")
+    raw = subprocess.run(
+        ["azd", "env", "get-values", "--output", "json"],
+        capture_output=True, text=True, check=True,
+    )
+    out = json.loads(raw.stdout)
+    required = (
+        "AZURE_SUBSCRIPTION_ID",
+        "resourceGroupName",
+        "connectorGatewayName",
+        "connectorGatewayId",
+        "gatewayPrincipalId",
+        "sharepointConnectionName",
+        "sharepointMcpConnectionName",
+        "sharepointMcpServerConfigName",
+        "sandboxGroupName",
+        "sandboxGroupId",
+        "sandboxGroupRegion",
+        "tenantId",
+    )
+    missing = [k for k in required if not out.get(k)]
+    if missing:
+        log.error("missing azd outputs: %s", missing)
+        sys.exit(2)
+
+    # Operator-supplied via `azd env set`
+    out.setdefault("SHAREPOINT_SITE_URL", "")
+    out.setdefault("SHAREPOINT_LIBRARY_ID", "")
+    out.setdefault("SHAREPOINT_OUTPUT_FOLDER", "Extracted")
+    out.setdefault("GITHUB_PAT", "")
+    return out
+
+
+def step_resolve_mcp_url(cfg: dict[str, Any]) -> str:
+    log.info("==> [2/9] resolving SharePoint MCP runtime URL")
+    arm = (
+        f"https://management.azure.com{cfg['connectorGatewayId']}"
+        f"/mcpserverConfigs/{cfg['sharepointMcpServerConfigName']}"
+        f"?api-version={CONNECTOR_GATEWAY_API_VERSION}"
+    )
+    resp = az_rest("get", arm)
+    url = resp["properties"].get("mcpEndpointUrl")
+    if not url:
+        log.error("mcpserverConfig has no mcpEndpointUrl yet: %s", resp)
+        sys.exit(2)
+    log.info("    MCP URL: %s", url)
+    return url
+
+
+def step_get_or_create_host_sandbox(cfg: dict[str, Any]) -> tuple[Any, str]:
+    """Find or create the long-lived host sandbox in the group.
+
+    Returns (sandbox_client, sandbox_id). The sandbox client is the
+    azure-containerapps-sandbox SDK object that exposes .exec,
+    .write_file, .set_egress_default, etc.
+    """
+    log.info("==> [3/9] creating or reusing host sandbox in %s", cfg["sandboxGroupName"])
+    import asyncio
+    from azure.identity.aio import DefaultAzureCredential
+    from azure.containerapps.sandbox.aio import SandboxGroupClient
+    from azure.containerapps.sandbox import endpoint_for_region
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    cred = DefaultAzureCredential()
+    sg_client = SandboxGroupClient(
+        endpoint=endpoint_for_region(cfg["sandboxGroupRegion"]),
+        credential=cred,
+        subscription_id=cfg["AZURE_SUBSCRIPTION_ID"],
+        resource_group_name=cfg["resourceGroupName"],
+        sandbox_group_name=cfg["sandboxGroupName"],
+    )
+
+    target_labels = {
+        "scenario": "connectors-document-automation",
+        "role": "listener",
+    }
+
+    async def find_or_create() -> Any:
+        async for sbx in sg_client.list_sandboxes():
+            labels = getattr(sbx, "labels", None) or {}
+            if labels.get("role") == "listener" and labels.get("scenario") == "connectors-document-automation":
+                log.info("    reusing existing sandbox id=%s", sbx.sandbox_id)
+                return sbx
+        log.info("    no existing listener sandbox found; creating one")
+        poller = await sg_client.begin_create_sandbox(
+            disk="ubuntu", cpu="2000m", memory="4096Mi",
+            labels=target_labels,
+        )
+        sandbox = await poller.result()
+        log.info("    sandbox created id=%s", sandbox.sandbox_id)
+        return sandbox
+
+    sandbox = loop.run_until_complete(find_or_create())
+    return sandbox, sandbox.sandbox_id
+
+
+def step_upload_listener(sandbox: Any) -> None:
+    log.info("==> [4/9] uploading listener code to sandbox")
+    import asyncio
+    here = Path(__file__).resolve().parent.parent.parent / "host"
+    files = ("listener.py", "prompt.md", "requirements.txt", "bootstrap.sh")
+    async def upload_all() -> None:
+        await sandbox.exec("mkdir -p /opt/listener /work")
+        for name in files:
+            src = here / name
+            dst = f"/opt/listener/{name}"
+            await sandbox.write_file(dst, src.read_bytes())
+        await sandbox.exec("chmod +x /opt/listener/bootstrap.sh")
+    asyncio.get_event_loop().run_until_complete(upload_all())
+
+
+def step_apply_egress(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
+    log.info("==> [5/9] applying egress policy (deny-default + transforms)")
+    import asyncio
+    from azure.containerapps.sandbox import EgressHeader
+
+    mcp_host = mcp_url.split("://", 1)[1].split("/", 1)[0]
+    pat = cfg.get("GITHUB_PAT", "")
+
+    async def apply() -> None:
+        try:
+            await sandbox.set_egress_default("Deny")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("    set_egress_default failed (probably already set): %s", exc)
+        try:
+            await sandbox.add_egress_transform_rule(
+                host=mcp_host,
+                headers=[EgressHeader(operation="Set", name="X-API-Key", value=_get_api_key(cfg))],
+                name="mcp-api-key",
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("    mcp transform rule add failed (probably already exists): %s", exc)
+        if pat:
+            for host, scheme, name in GITHUB_TRANSFORM_HOSTS:
+                try:
+                    await sandbox.add_egress_transform_rule(
+                        host=host,
+                        headers=[EgressHeader(operation="Set", name="Authorization", value=f"{scheme} {pat}")],
+                        name=name,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("    %s transform rule add failed: %s", host, exc)
+        else:
+            log.warning(
+                "    GITHUB_PAT is empty — Copilot CLI inside the sandbox "
+                "will fail. Set it with `azd env set GITHUB_PAT <token>` "
+                "and re-run azd hooks run postdeploy."
+            )
+    asyncio.get_event_loop().run_until_complete(apply())
+
+
+def _get_api_key(cfg: dict[str, Any]) -> str:
+    """Issue a never-expiring MCP-scoped runtime API key."""
+    arm = (
+        f"https://management.azure.com/subscriptions/{cfg['AZURE_SUBSCRIPTION_ID']}"
+        f"/resourceGroups/{cfg['resourceGroupName']}"
+        f"/providers/Microsoft.Web/connectorGateways/{cfg['connectorGatewayName']}"
+        f"/listApiKey?api-version={CONNECTOR_GATEWAY_API_VERSION}"
+    )
+    resp = az_rest("post", arm, body={
+        "scope": cfg["sharepointMcpServerConfigName"],
+        "neverExpire": True,
+    })
+    key = resp.get("key")
+    if not key:
+        log.error("listApiKey returned no key: %s", resp)
+        sys.exit(2)
+    return key
+
+
+def step_run_bootstrap(sandbox: Any, cfg: dict[str, Any], mcp_url: str) -> None:
+    log.info("==> [6/9] running bootstrap.sh inside sandbox (~30-90s)")
+    import asyncio
+
+    env_exports = " ".join(
+        f"{k}='{v}'" for k, v in {
+            "SHAREPOINT_MCP_URL": mcp_url,
+            "SHAREPOINT_SITE_URL": cfg.get("SHAREPOINT_SITE_URL", ""),
+            "SHAREPOINT_LIBRARY_ID": cfg.get("SHAREPOINT_LIBRARY_ID", ""),
+            "SHAREPOINT_OUTPUT_FOLDER": cfg.get("SHAREPOINT_OUTPUT_FOLDER", "Extracted"),
+            "COPILOT_GITHUB_TOKEN": cfg.get("GITHUB_PAT", ""),
+        }.items()
+    )
+    cmd = f"bash -lc \"{env_exports} bash /opt/listener/bootstrap.sh\""
+
+    async def run() -> None:
+        r = await sandbox.exec(cmd, timeout=600)
+        if r.exit_code != 0:
+            log.error("bootstrap failed exit=%d\nstdout:\n%s\nstderr:\n%s",
+                      r.exit_code, (r.stdout or "")[:4000], (r.stderr or "")[:1000])
+            sys.exit(2)
+        log.info("    bootstrap ok\n%s", (r.stdout or "").splitlines()[-1] if r.stdout else "")
+    asyncio.get_event_loop().run_until_complete(run())
+
+
+def step_register_port(cfg: dict[str, Any], sandbox_id: str) -> str:
+    log.info("==> [7/9] registering port 8080 with ADC proxy (Entra-restricted to gateway MI)")
+    region = cfg["sandboxGroupRegion"]
+    url = f"https://{ADC_PROXY_HOST_TEMPLATE.format(sandbox_id=sandbox_id, port=8080, region=region)}"
+    body = {
+        "ports": [{
+            "port": 8080,
+            "url": url,
+            "auth": {
+                "anonymous": False,
+                "entraId": {
+                    "enabled": True,
+                    "objectIds": [cfg["gatewayPrincipalId"]],
+                    "tenantIds": [cfg["tenantId"]],
+                },
+            },
+            "activationMode": "OnDemand",
+            "protocol": "Http",
+        }],
+    }
+    # Per the HAR, the real endpoint is on management.<region>.azuredevcompute.io
+    arm = (
+        f"https://management.{region}.azuredevcompute.io"
+        f"/subscriptions/{cfg['AZURE_SUBSCRIPTION_ID']}"
+        f"/resourceGroups/{cfg['resourceGroupName']}"
+        f"/sandboxGroups/{cfg['sandboxGroupName']}"
+        f"/sandboxes/{sandbox_id}/ports"
+    )
+    az_rest("put", arm, body=body)
+    log.info("    port URL: %s", url)
+    return url
+
+
+def step_create_trigger(cfg: dict[str, Any], sandbox_id: str, callback_url: str) -> None:
+    log.info("==> [8/9] creating/updating trigger config")
+    # Defaults — operator can override via azd env set
+    site_url = cfg.get("SHAREPOINT_SITE_URL") or ""
+    library_id = cfg.get("SHAREPOINT_LIBRARY_ID") or ""
+    if not site_url or not library_id:
+        log.warning(
+            "    SHAREPOINT_SITE_URL or SHAREPOINT_LIBRARY_ID is empty; "
+            "trigger config will be created without `parameters` "
+            "and you'll need to fill them in manually via the portal."
+        )
+    trigger_name = f"on-new-file-{sandbox_id[:8]}"
+    arm = (
+        f"https://management.azure.com{cfg['connectorGatewayId']}"
+        f"/triggerConfigs/{trigger_name}"
+        f"?api-version={CONNECTOR_GATEWAY_API_VERSION}"
+    )
+    body = {
+        "location": cfg["sandboxGroupRegion"],  # informational
+        "properties": {
+            "state": "Enabled",
+            "description": (
+                "When a new file is created in the configured SharePoint "
+                "library, POST its dynamicProperties directly to the host "
+                "sandbox's listener on port 8080."
+            ),
+            "connectionDetails": {
+                "connectorName": "sharepointonline",
+                "connectionName": cfg["sharepointConnectionName"],
+            },
+            "operationName": "GetOnNewFileItems",
+            "parameters": [
+                {"name": "dataset", "value": site_url},
+                {"name": "table", "value": library_id},
+            ] if site_url and library_id else [],
+            "notificationDetails": {
+                "callbackUrl": callback_url,
+                "httpMethod": "POST",
+                "body": "@{triggerBody()?['dynamicProperties']}",
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": ADC_PROXY_AUDIENCE,
+                },
+            },
+            "metadata": {
+                "sandboxGroupName": cfg["sandboxGroupName"],
+                "sandboxId": sandbox_id,
+                "recurrenceFrequency": "Minute",
+                "recurrenceInterval": "1",
+            },
+        },
+    }
+    az_rest("put", arm, body=body)
+    log.info("    trigger config: %s (poll every 1 min)", trigger_name)
+
+
+def step_authorize_connections(cfg: dict[str, Any]) -> None:
+    log.info("==> [9/9] authorizing connections (browser tabs)")
+    # Install connector-namespace ext if missing
+    show = subprocess.run(
+        ["az", "extension", "show", "--name", "connector-namespace"],
+        capture_output=True, text=True, check=False,
+    )
+    if show.returncode != 0:
+        log.info("    installing 'connector-namespace' az CLI extension")
+        subprocess.run(
+            ["az", "extension", "add", "--source", CONNECTOR_NS_EXT_WHEEL, "--yes"],
+            check=True,
+        )
+
+    for conn_name, label in (
+        (cfg["sharepointConnectionName"], "SharePoint Online (trigger)"),
+        (cfg["sharepointMcpConnectionName"], "SharePoint MCP (sandbox -> SP)"),
+    ):
+        log.info("    authorizing %s (%s)", label, conn_name)
+        subprocess.run([
+            "az", "connector-namespace", "connection", "authorize",
+            "--resource-group", cfg["resourceGroupName"],
+            "--namespace-name", cfg["connectorGatewayName"],
+            "--name", conn_name,
+        ], check=False)  # don't hard-fail; operator may have cancelled the browser
+
+
+def step_summary(cfg: dict[str, Any], sandbox_id: str, callback_url: str) -> None:
+    log.info(textwrap.dedent(f"""
+        =============================================================
+         ALL DONE
+        =============================================================
+         Drop a PDF into the configured SharePoint library / folder.
+         The Connector Gateway polls once a minute and POSTs each new
+         file's properties directly to:
+
+           {callback_url}
+
+         Watch the listener inside the sandbox with:
+
+           # bash (Linux/macOS) — needs `az` + recent Azure SDK
+           az containerapp sandbox exec \\
+             --resource-group {cfg['resourceGroupName']} \\
+             --sandbox-group-name {cfg['sandboxGroupName']} \\
+             --sandbox-id {sandbox_id} \\
+             --command 'journalctl -u listener.service -f'
+
+         Tear down with:
+           azd down --purge --force --no-prompt
+    """))
+
+
+# ---- Entry point ----------------------------------------------------------
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--skip-oauth", action="store_true",
+        help="Skip the browser-based OAuth consent step (useful in CI re-runs).",
+    )
+    args = ap.parse_args()
+
+    cfg = step_resolve_inputs()
+    mcp_url = step_resolve_mcp_url(cfg)
+    sandbox, sandbox_id = step_get_or_create_host_sandbox(cfg)
+    step_upload_listener(sandbox)
+    step_apply_egress(sandbox, cfg, mcp_url)
+    step_run_bootstrap(sandbox, cfg, mcp_url)
+    callback_url = step_register_port(cfg, sandbox_id)
+    step_create_trigger(cfg, sandbox_id, callback_url)
+    if not args.skip_oauth:
+        step_authorize_connections(cfg)
+    step_summary(cfg, sandbox_id, callback_url)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

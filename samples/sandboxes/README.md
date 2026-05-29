@@ -85,6 +85,7 @@ documentation and how to override defaults.
 | 07 | [computer-use](scenarios/07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview` / gpt-5.4) driving Chrome inside a sandbox to fill out a form or any web task; watch live via noVNC. Built on the OpenAI Agents SDK (`AsyncComputer` + `ComputerTool`). | ✅ OpenAI ready |
 | 08 | [sandbox-agents](scenarios/08-sandbox-agents) | Agent frameworks (OpenAI Agents SDK, Claude Managed Agents, LangChain Deep Agents) using ACA sandboxes as their tool-execution backend. OpenAI ships a **first-class provider package** (`agents_aca_sandboxes`) plus a live Deep Research demo and a platform-architecture brief. | ✅ OpenAI provider + demo |
 | 09 | [mcp-hosting](scenarios/09-mcp-hosting) | Host MCP servers in a sandbox — `excalidraw-anonymous` (public via `add_port`) and `dab-sql-devtunnel` (DAB + Postgres + Chinook, exposed via Dev Tunnels with **no inbound port** on the sandbox) | ✅ Python ready · 📝 CLI planned |
+| 11 | [connectors-document-automation](scenarios/11-connectors-document-automation) | **Direct trigger → sandbox** demo. Azure Connector Gateway "When a file is created" trigger POSTs SharePoint events straight to a sandbox's HTTP listener (no receiver, no Functions). Inside the sandbox, Copilot CLI uses `pdftotext` / `tesseract` and the Work IQ SharePoint MCP to extract invoice data and write the result back to SharePoint. | ✅ ready |
 
 ## Reference
 

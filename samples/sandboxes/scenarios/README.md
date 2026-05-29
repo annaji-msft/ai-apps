@@ -16,3 +16,4 @@ on those topics.
 | 07 | [computer-use](07-computer-use) | LLM computer-use agent (Azure OpenAI `computer-use-preview`) driving Chromium inside a sandbox to fill out a form; watch live via noVNC | ✅ OpenAI ready |
 | 08 | [sandbox-agents](08-sandbox-agents) | Wire agent frameworks (OpenAI Agents SDK, LangChain, Anthropic) to a sandbox as their tool-execution environment | ✅ ready |
 | 09 | [mcp-hosting](09-mcp-hosting) | Host **Model Context Protocol (MCP)** servers in sandboxes (`excalidraw-anonymous`, `dab-sql-devtunnel`) for AI clients to connect over HTTPS | ✅ ready |
+| 11 | [connectors-document-automation](11-connectors-document-automation) | **Direct trigger → sandbox**. Azure Connector Gateway file-created trigger POSTs straight to a sandbox's HTTP listener; Copilot CLI + Tesseract extract invoice data; SharePoint MCP writes results back. No receiver / no Functions. | ✅ ready |
