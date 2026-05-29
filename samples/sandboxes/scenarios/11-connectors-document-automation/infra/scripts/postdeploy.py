@@ -481,13 +481,19 @@ def step_create_trigger(cfg: dict[str, Any], sandbox_id: str, callback_url: str)
             "metadata": {
                 "sandboxGroupName": cfg["sandboxGroupName"],
                 "sandboxId": sandbox_id,
-                "recurrenceFrequency": "Minute",
-                "recurrenceInterval": "1",
+                # Poll cadence — Connector Namespaces dispatches the
+                # trigger this often. 10s is aggressive (the SharePoint
+                # connector still does its own change-detection under
+                # the hood, so this is a lower-bound, not a guaranteed
+                # cadence). Drop back to Minute/1 if you hit gateway
+                # throttling.
+                "recurrenceFrequency": "Second",
+                "recurrenceInterval": "10",
             },
         },
     }
     az_rest("put", arm, body=body)
-    log.info("    trigger config: %s (poll every 1 min)", trigger_name)
+    log.info("    trigger config: %s (poll every 10s)", trigger_name)
 
 
 def step_authorize_connections(cfg: dict[str, Any]) -> None:

@@ -1,8 +1,7 @@
 # ACA Sandbox: event-driven SharePoint document automation with OCR + LLM extraction
 
 > **An ACA Sandbox is the direct HTTPS webhook target for a Connector
-> Namespaces SharePoint trigger — no receiver app, no Function host
-> in between. Inside the sandbox, GitHub Copilot CLI uses the
+> Namespaces SharePoint trigger. Inside the sandbox, GitHub Copilot CLI uses the
 > SharePoint MCP to fetch the new file, `pdftotext` / `tesseract`
 > extract the invoice data, and the result is written back to
 > SharePoint via the same MCP.**
@@ -48,7 +47,7 @@ into your input folder:
 | `invoice-text.pdf` | the easy case (`pdftotext` extracts directly) |
 | `invoice-scanned.pdf` | same invoice as an image-only PDF — forces the agent through the `tesseract` OCR fallback |
 
-Within ~60 seconds the namespace poll fires, the sandbox wakes via
+Within ~10 seconds the namespace poll fires, the sandbox wakes via
 the `OnDemand` activation, Copilot CLI walks the SharePoint MCP
 (`getSiteByPath` → `listDocumentLibrariesInSite` → `getFolderChildren`
 → `readSmallBinaryFile` → `createSmallTextFile`), and a
@@ -90,19 +89,19 @@ azd down --purge --force
 
 ```
         ┌─────────────────────────────┐
-        │  📄 New file lands in       │
+        │  New file lands in          │
         │  /<input folder>/           │
         └──────────────┬──────────────┘
-                       │   polled every 1 min
+                       │   polled every 10s
                        ▼
  ┌─────────────────────────────────────────────────────────────────┐
- │  Connector Namespace  (westcentralus)                             │
+ │  Connector Namespace  (westcentralu                             │
  │  ├─ sharepointonline connection  (OAuth → your SP site)         │
  │  ├─ workiqsharepoint connection  (OAuth → your SP site, MCP)    │
  │  ├─ mcpserverConfig (kind=ManagedMcpServer, workiqsharepoint)   │
  │  └─ triggerConfig (GetOnNewFileItems)                           │
  │       authentication: ManagedServiceIdentity                    │
- │         identity  = namespace MI                                  │
+ │         identity  = namespace                                   │
  │         audience  = https://auth.adcproxy.io/                   │
  │       callbackUrl = https://<sbxId>--8080.<region>.adcproxy.io  │
  │       body        = @triggerBody()                              │
@@ -115,7 +114,7 @@ azd down --purge --force
                               ▼
  ┌─────────────────────────────────────────────────────────────────┐
  │  adcproxy.io  (per-sandbox HTTPS, Entra-restricted)             │
- │    auth.entraId.objectIds = [ namespace MI principalId ]          │
+ │    auth.entraId.objectIds = [ namespace MI principalId ]        │
  │    activationMode         = OnDemand                            │
  │    → wake sandbox if cold, forward POST to :8080                │
  └────────────────────────────┬────────────────────────────────────┘
@@ -147,14 +146,14 @@ azd down --purge --force
  │                            ▼                                    │
  │   ┌─────────────────────────────────────────────────────────┐   │
  │   │ egress proxy  (Deny default + Transform rules)          │   │
- │   │   X-API-Key:     <namespace MCP key>  on MCP host         │   │
+ │   │   X-API-Key:     <namespace MCP key>  on MCP host       │   │
  │   │   Authorization: token <PAT>        on GitHub hosts     │   │
  │   │   → sandbox holds NO MCP key; key stamped at boundary   │   │
  │   └────────────────────────┬────────────────────────────────┘   │
  └────────────────────────────┼────────────────────────────────────┘
                               ▼
  ┌─────────────────────────────────────────────────────────────────┐
- │  Connector Namespace MCP runtime → workiqsharepoint backend       │
+ │  Connector Namespace MCP runtime → workiqsharepoint backend     │
  │  → Microsoft Graph (using the SharePoint connection's OAuth)    │
  │  → write <filename>.json into /<output folder>/                 │
  └─────────────────────────────────────────────────────────────────┘
