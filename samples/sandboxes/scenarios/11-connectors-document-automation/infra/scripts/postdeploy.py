@@ -54,6 +54,15 @@ import time
 from pathlib import Path
 from typing import Any
 
+# Force stdout to UTF-8 so the ✓ in success logs (and other non-ASCII
+# in subprocess output we tee through) doesn't crash on Windows where
+# the default console encoding is cp1252.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -512,17 +521,25 @@ def _connection_status(cfg: dict[str, Any], connection_name: str) -> str:
 
 
 def _authorize_one_connection(cfg: dict[str, Any], connection_name: str, label: str) -> None:
-    """Run the official 2-step OAuth consent flow:
+    """Run the official OAuth consent flow for a Connector Namespaces
+    connection, using only ARM REST APIs (no third-party CLI ext).
 
-        1. POST .../connections/<name>/listConsentLinks  → { link, ... }
-        2. open `link` in the user's browser
-        3. browser redirects to http://localhost:<random>/callback?code=...
-        4. POST .../connections/<name>/confirmConsentCode { code, objectId, tenantId }
+    Flow:
+      1. POST .../connections/<name>/listConsentLinks → { value: [{ link }] }
+      2. Open `link` in the user's browser. The link is a self-
+         contained logic-apis consent page that handles the OAuth
+         dance + token persistence inside the connector runtime.
+         There is no redirect back to our app — once the user
+         completes consent on that page, the connection's
+         `overallStatus` flips to `Connected` server-side.
+      3. Poll the connection's overallStatus until `Connected`
+         (or timeout).
 
-    Replaces the previous dependency on the unofficial
-    `connector-namespace` az CLI extension. Uses only `az rest` (for
-    ARM auth/data plane), the stdlib http.server (for the loopback
-    redirect catcher), and `webbrowser.open` (for the consent tab).
+    No loopback HTTP server, no confirmConsentCode call. The unofficial
+    `connector-namespace` az CLI ext we used to depend on does the
+    same thing under the hood. confirmConsentCode is a separate flow
+    used by custom connectors that issue their own consent codes —
+    not by managed connectors like sharepointonline / workiqsharepoint.
     """
     log.info("    %s (%s)", label, connection_name)
 
@@ -530,7 +547,6 @@ def _authorize_one_connection(cfg: dict[str, Any], connection_name: str, label: 
         log.info("      already Connected; skipping consent flow")
         return
 
-    # 1. Operator identity (objectId of the user running azd up).
     me = az_json("ad", "signed-in-user", "show", "--query", "id")
     if not me:
         log.warning("      could not resolve signed-in user objectId; skipping")
@@ -538,106 +554,65 @@ def _authorize_one_connection(cfg: dict[str, Any], connection_name: str, label: 
     object_id = me if isinstance(me, str) else str(me)
     tenant_id = cfg["tenantId"]
 
-    # 2. Loopback redirect listener. The OAuth dance redirects here
-    # with the consent code in the query string. We capture it and
-    # show a friendly page so the user knows they can close the tab.
-    import http.server
-    import socketserver
-    import threading
-    import urllib.parse
-    import webbrowser
-
-    captured: dict[str, str | None] = {"code": None, "error": None}
-
-    class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802
-            qs = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(qs)
-            if "code" in params:
-                captured["code"] = params["code"][0]
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(
-                    b"<html><body style=\"font-family:system-ui;padding:2em;\">"
-                    b"<h2 style=\"color:#107C10\">\u2713 Consent captured</h2>"
-                    b"<p>You can close this tab. Back to your terminal.</p>"
-                    b"</body></html>"
-                )
-            else:
-                captured["error"] = params.get("error_description", [params.get("error", ["unknown"])[0]])[0]
-                self.send_response(400)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(f"consent flow failed: {captured['error']}".encode())
-
-        def log_message(self, *args, **kwargs) -> None:  # silence stdlib chatter
-            return
-
-    server = socketserver.TCPServer(("127.0.0.1", 0), _CallbackHandler)
-    port = server.server_address[1]
-    redirect_url = f"http://localhost:{port}/callback"
-    t = threading.Thread(target=server.serve_forever, daemon=True)
-    t.start()
-
-    try:
-        # 3. Ask the namespace for a consent link bound to our loopback.
-        arm_base = _connection_arm_base(cfg, connection_name)
-        link_resp = az_rest(
-            "post",
-            f"{arm_base}/listConsentLinks?api-version={CONNECTOR_GATEWAY_API_VERSION}",
-            body={
-                "parameters": [{
-                    "objectId": object_id,
-                    "parameterName": "token",
-                    "redirectUrl": redirect_url,
-                    "tenantId": tenant_id,
-                }],
-            },
-        )
-        if not link_resp or not link_resp.get("value"):
-            log.warning("      listConsentLinks returned no links; skipping")
-            return
-        link = link_resp["value"][0].get("link")
-        if not link:
-            log.warning("      listConsentLinks returned no `link` field; skipping")
-            return
-
-        log.info("      opening browser for OAuth consent…")
-        log.info("      (if no tab opens, paste this URL manually:\n         %s)", link)
-        try:
-            webbrowser.open(link)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("      webbrowser.open failed (%s); paste the link manually", exc)
-
-        # 4. Wait up to 5 min for the user to complete consent.
-        import time as _time
-        deadline = _time.time() + 300
-        while captured["code"] is None and captured["error"] is None and _time.time() < deadline:
-            _time.sleep(1)
-        if captured["error"]:
-            log.warning("      consent failed: %s", captured["error"])
-            return
-        if captured["code"] is None:
-            log.warning("      timed out waiting for consent (5 min); skipping")
-            return
-
-        # 5. Exchange the consent code for stored credentials.
-        az_rest(
-            "post",
-            f"{arm_base}/confirmConsentCode?api-version={CONNECTOR_GATEWAY_API_VERSION}",
-            body={
-                "code": captured["code"],
+    # 1. Ask the namespace for a consent link.
+    #
+    # NOTE: `redirectUrl` is REQUIRED by the listConsentLinks API
+    # (omitting it yields HTTP 500 InternalServerError) but the
+    # first-party Logic-Apps consent flow does NOT navigate to it
+    # after the user signs in — the consent service commits the
+    # OAuth tokens server-side and shows its own "connection
+    # authorized" page. So we pass a harmless HTTPS placeholder
+    # (the connector platform's own callback host) and don't need
+    # a loopback HTTP server to capture anything.
+    arm_base = _connection_arm_base(cfg, connection_name)
+    link_resp = az_rest(
+        "post",
+        f"{arm_base}/listConsentLinks?api-version={CONNECTOR_GATEWAY_API_VERSION}",
+        body={
+            "parameters": [{
                 "objectId": object_id,
+                "parameterName": "token",
                 "tenantId": tenant_id,
-            },
-        )
-        log.info("      \u2713 %s authenticated", connection_name)
-    finally:
-        try:
-            server.shutdown()
-        except Exception:
-            pass
+                "redirectUrl": "https://global.consent.azure-apim.net/redirect",
+            }],
+        },
+    )
+    if not link_resp or not link_resp.get("value"):
+        log.warning("      listConsentLinks returned no links; skipping")
+        return
+    link = link_resp["value"][0].get("link")
+    if not link:
+        log.warning("      listConsentLinks returned no `link` field; skipping")
+        return
+
+    # 2. Open it. Also print the URL as a fallback for environments
+    # where webbrowser.open is blocked (e.g., Windows Security).
+    log.info("      opening browser for OAuth consent...")
+    log.info("      (if no tab opens, paste this URL manually:\n         %s)", link)
+    import webbrowser
+    try:
+        webbrowser.open(link)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("      webbrowser.open failed (%s); paste the link manually", exc)
+
+    # 3. Poll for Connected. The consent page commits the OAuth
+    # tokens server-side; we just have to wait for the connection
+    # to reflect the new state. ~5 min cap, 3s cadence.
+    import time as _time
+    deadline = _time.time() + 300
+    last_status = ""
+    while _time.time() < deadline:
+        s = _connection_status(cfg, connection_name)
+        if s != last_status:
+            log.info("      status: %s", s or "?")
+            last_status = s
+        if s.lower() == "connected":
+            log.info("      \u2713 %s authenticated", connection_name)
+            return
+        _time.sleep(3)
+    log.warning("      timed out waiting for consent (5 min). Re-run "
+                "`python infra/scripts/postdeploy.py --skip-oauth=false` "
+                "when you're ready to complete the browser flow.")
 
 
 def step_authorize_connections(cfg: dict[str, Any]) -> None:
